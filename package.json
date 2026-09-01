@@ -34,7 +34,8 @@
   "overrides": {
     "@esbuild-kit/core-utils": {
       "esbuild": "^0.25.4"
-    }
+    },
+    "cookie": "^0.7.0"
   },
   "allowScripts": {
     "esbuild@0.25.12": true
