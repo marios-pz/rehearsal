@@ -76,14 +76,22 @@ button.go[disabled] { opacity: .3; cursor: not-allowed; }
 .divider { font-size: 9.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--dim);
            border-top: 1px solid var(--line); padding-top: 11px; margin: 16px 0 9px; }
 .right { position: sticky; top: 12px; }
-.prev { border: 1px solid var(--marker); border-top: 0; background: var(--pane); padding: 12px 13px; }
-.prev.empty { border-color: var(--line); color: var(--dim); font-size: 12px; text-align: center; padding: 14px; }
-.prev h2 { font-family: var(--disp); font-weight: 400; text-transform: uppercase;
-           font-size: 23px; line-height: 1; margin: 0 0 3px; }
 .note { font-size: 12.5px; color: var(--dim); margin: 8px 0 0; }
 .social { display: inline-flex; align-items: center; gap: 7px; margin-top: 11px; font-size: 12.5px;
           border: 1px solid var(--ink); padding: 8px 12px; color: var(--ink); text-decoration: none; }
 .social:hover { background: var(--marker); color: #08080a; border-color: var(--marker); }
+
+/* Results page: a centered box split into results and map, with the
+   full ad opening in its own box underneath rather than in-column, so
+   it reads the same whether you clicked a card or a pin. */
+.back { display: inline-block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+        color: var(--dim); text-decoration: none; margin-bottom: 14px; }
+.back:hover { color: var(--ink); }
+.board { max-width: 900px; margin: 0 auto 16px; border: 1px solid var(--line);
+         background: var(--pane); padding: 16px; }
+.detail { border-color: var(--marker); }
+.detail h2 { font-family: var(--disp); font-weight: 400; text-transform: uppercase;
+             font-size: 23px; line-height: 1; margin: 0 0 3px; }
 
 .form { max-width: 560px; }
 .tokenbox { border: 1px solid var(--stamp); padding: 16px; }

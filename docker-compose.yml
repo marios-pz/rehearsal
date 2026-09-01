@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      # No password: matches the trust-auth DATABASE_URL in .env
+      # ("postgres://postgres@...", no password segment). The db is only
+      # reachable from other containers on this compose network, not
+      # published to the host, so trust auth stays contained here.
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_USER: postgres
+      POSTGRES_DB: rehearsal
+    volumes:
+      # Postgres 18's image lays data out under /var/lib/postgresql itself
+      # (pg_ctlcluster-style, versioned subdirs), not .../data as in <18.
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rehearsal"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres@db:5432/rehearsal
+      # adapter-node checks the Origin header on form POSTs against this.
+      ORIGIN: ${ORIGIN:-http://localhost:3000}
+      PORT: 3000
+      SEED_DEMO: ${SEED_DEMO:-false}
+    ports:
+      - "3000:3000"
+
+volumes:
+  db-data:

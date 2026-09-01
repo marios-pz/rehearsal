@@ -101,11 +101,6 @@ async function main() {
     const seeded = await seedReference(sql);
     log(c.dim(`reference data: ${seeded}`));
 
-    if (fresh && process.env.SEED_DEMO === "true") {
-      const n = await seedDemoAds(sql);
-      log(c.yellow(`seeded ${n} demo ads (SEED_DEMO=true)`));
-    }
-
     console.log(c.green("   ready\n"));
   } finally {
     await sql`select pg_advisory_unlock(${LOCK_ID})`.catch(() => {});

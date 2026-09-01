@@ -21,3 +21,12 @@ rad.json
 *.flf
 #Test results file
 TestResults.xml
+
+### Node / SvelteKit ###
+node_modules/
+.svelte-kit/
+build/
+.env
+.env.*
+!.env.example
+npm-debug.log*

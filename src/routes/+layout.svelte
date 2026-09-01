@@ -4,6 +4,7 @@
 	let { children } = $props();
 	const TITLES: Record<string, string> = {
 		'/': 'Find a band',
+		'/results': 'Results',
 		'/post': 'Post an ad',
 		'/renew': 'Renew an ad'
 	};
