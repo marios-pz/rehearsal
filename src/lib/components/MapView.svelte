@@ -1,15 +1,14 @@
 <script lang="ts">
 	import 'leaflet/dist/leaflet.css';
 	import { onMount } from 'svelte';
-	import { pathToLatLngRings, type GeoFile } from '$lib/geo';
+	import type { GeoFile } from '$lib/geo';
 	import type * as Leaflet from 'leaflet';
 
 	type Pin = { id: string; lat: number; lng: number; label: string; paid?: boolean };
 	let {
-		geo, region = null, pins = [], selected = $bindable(null), hot = null, pickable = false,
-		onpick
+		geo, pins = [], selected = $bindable(null), hot = null, pickable = false, onpick
 	}: {
-		geo: GeoFile; region?: string | null; pins?: Pin[];
+		geo: GeoFile; pins?: Pin[];
 		selected?: string | null; hot?: string | null;
 		pickable?: boolean; onpick?: (p: { lat: number; lng: number }) => void;
 	} = $props();
@@ -22,7 +21,6 @@
 	let ready = $state(false);
 	let L: typeof Leaflet;
 	let map: Leaflet.Map;
-	let regionLayer: Leaflet.Polygon | null = null;
 	let pinLayer: Leaflet.LayerGroup;
 	let dropLayer: Leaflet.LayerGroup;
 
@@ -79,7 +77,10 @@
 	}
 
 	// Redraws whenever the pin set or the selected/hot ids change, and
-	// once more the moment the map itself becomes ready.
+	// once more the moment the map itself becomes ready. Frames on the
+	// pins themselves when there are any — real tiles already carry
+	// enough geographic context that a drawn region outline on top of
+	// them was redundant, so there's nothing else to frame on here.
 	$effect(() => {
 		if (!ready) return;
 		pinLayer.clearLayers();
@@ -91,20 +92,8 @@
 			});
 			marker.addTo(pinLayer);
 		}
-	});
-
-	// Highlights the chosen region's outline (converted from its
-	// pre-projected path back to lat/lng) and frames the map on it; with
-	// none chosen, frames the whole country instead.
-	$effect(() => {
-		if (!ready) return;
-		if (regionLayer) { regionLayer.remove(); regionLayer = null; }
-		const r = geo.regions.find((x) => x.k === region);
-		if (r) {
-			regionLayer = L.polygon(pathToLatLngRings(geo, r.d), {
-				color: '#e4ff32', weight: 1.6, opacity: 0.9, fillColor: '#1e1e26', fillOpacity: 0.45
-			}).addTo(map);
-			map.fitBounds(regionLayer.getBounds(), { padding: [40, 40] });
+		if (pins.length) {
+			map.fitBounds(pins.map((p) => [p.lat, p.lng] as [number, number]), { padding: [40, 40], maxZoom: 12 });
 		} else {
 			map.fitBounds(countryBounds());
 		}
@@ -125,9 +114,7 @@
 		map?.setZoom(map.getZoom() + delta);
 	}
 	function resetView() {
-		if (!map) return;
-		const r = geo.regions.find((x) => x.k === region);
-		map.fitBounds(r ? L.polygon(pathToLatLngRings(geo, r.d)).getBounds() : countryBounds());
+		map?.fitBounds(countryBounds());
 	}
 </script>
 
@@ -138,7 +125,7 @@
 	<div class="zoom">
 		<button type="button" onclick={() => zoom(1)} aria-label="Zoom in">+</button>
 		<button type="button" onclick={() => zoom(-1)} aria-label="Zoom out">&minus;</button>
-		<button type="button" class="rs" aria-label="Whole region" onclick={resetView}>ALL</button>
+		<button type="button" class="rs" aria-label="Whole country" onclick={resetView}>ALL</button>
 	</div>
 	{#if pickable}
 		<div class="coords">click the map to place it</div>
@@ -146,7 +133,8 @@
 </div>
 
 <style>
-	.wrap { position: relative; border: 1px solid var(--line); background: var(--sea); overflow: hidden; }
+	.wrap { position: relative; border: 1px solid var(--line); background: var(--sea); overflow: hidden;
+	        clip-path: polygon(0 10px, 10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%); }
 	.map { width: 100%; height: 400px; background: var(--sea); }
 	.map.pick { height: 300px; cursor: crosshair; }
 	@media (max-width: 820px) { .map { height: 280px; } }

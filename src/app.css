@@ -22,30 +22,65 @@
 body {
 	margin: 0; background: var(--bg); color: var(--ink);
 	font-family: var(--mono); font-size: 14px; line-height: 1.45;
+	/* Fine halftone grit, plus a sparser skull tile behind it. Both baked
+	   into the image at low fill-opacity (not a CSS opacity on the layer,
+	   background-image has no such thing) so they read as texture, not
+	   wallpaper. */
+	background-image:
+		radial-gradient(circle, rgba(237,235,228,.05) 1px, transparent 1px),
+		url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2240%22%20height%3D%2240%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cg%20fill%3D%22%23edebe4%22%20fill-opacity%3D%220.022%22%3E%3Cpath%20d%3D%22M12%202C7.03%202%203%205.8%203%2010.2c0%202.9%201.7%205.4%203.1%206.8l-.5%202.1c-.2.8.4%201.5%201.2%201.5h1l.4%201.4c.2.6.8%201%201.4%201h4.8c.6%200%201.2-.4%201.4-1l.4-1.4h1c.8%200%201.4-.7%201.2-1.5l-.5-2.1c1.4-1.4%203.1-3.9%203.1-6.8C21%205.8%2016.97%202%2012%202Zm-3.5%209.5a1.6%201.6%200%201%201%200-3.2%201.6%201.6%200%200%201%200%203.2Zm7%200a1.6%201.6%200%201%201%200-3.2%201.6%201.6%200%200%201%200%203.2ZM12%2013l1.3%202.6h-2.6L12%2013Z%22/%3E%3C/g%3E%3C/svg%3E");
+	background-size: 5px 5px, 180px 180px;
+	background-position: 0 0, 0 0;
+	background-attachment: fixed, fixed;
 }
 :focus-visible { outline: 2px solid var(--stamp); outline-offset: 2px; }
 .shell { max-width: 1100px; margin: 0 auto; padding: 18px 16px 60px; }
 
+/* A shared torn-corner notch for panels that were reading as too clean a
+   rectangle — small enough it never eats into real hit-target area. */
+.torn { clip-path: polygon(0 7px, 7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%); }
+
 .kicker { font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--dim); margin: 0; }
+/* A white sticker-card pops in behind on hover, like a highlighter swipe
+   caught mid-lean. Shared by the brand mark and the nav links below. */
+.pop { position: relative; z-index: 1; }
+.pop::before {
+	content: ''; position: absolute; inset: -5px -10px; background: #f3f1ea;
+	border-radius: 7px; transform: rotate(-2.5deg) scale(.85); opacity: 0; z-index: -1;
+	transition: opacity .16s var(--ease), transform .16s var(--ease);
+}
+.pop:hover::before { opacity: 1; transform: rotate(-2.5deg) scale(1); }
+@media (prefers-reduced-motion: reduce) { .pop::before { transition: none; } }
+
 h1 { font-family: var(--disp); font-weight: 400; text-transform: uppercase;
-     font-size: clamp(28px, 6.5vw, 46px); line-height: .92; margin: 6px 0 0; }
+     font-size: clamp(28px, 6.5vw, 46px); line-height: .92; margin: 6px 0 0;
+     transform: rotate(-1deg); text-shadow: 3px 3px 0 var(--stamp); display: inline-block; }
+h1.pop:hover { color: #08080a; text-shadow: none; }
 .lab { font-family: var(--disp); font-size: clamp(19px, 4.4vw, 26px); letter-spacing: .03em;
-       text-transform: uppercase; margin: 0 0 3px; }
+       text-transform: uppercase; margin: 0 0 3px; transform: rotate(-.6deg); display: inline-block; }
 .hint { font-size: 11.5px; color: var(--dim); margin: 0 0 11px; }
 
 .top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 20px; }
-.switch { display: flex; border: 1px solid var(--line); flex: none; }
+.switch { display: flex; gap: 8px; flex: none; }
 .switch a { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; padding: 8px 12px;
-            color: var(--dim); text-decoration: none; }
-.switch a[aria-current="page"] { background: var(--ink); color: #08080a; }
+            color: var(--dim); text-decoration: none; border: 1px solid var(--line); }
+.switch a:hover { color: #08080a; }
+.switch a[aria-current="page"] { background: var(--ink); color: #08080a; border-color: var(--ink); }
 
-/* Progressive reveal: each step unlocks the next, staggered. */
+/* Progressive reveal: each step unlocks the next, staggered.
+   No `filter` here on purpose: animating it to/from `none` leaves the
+   computed value as `blur(0px)` even after the animation ends (fill:
+   forwards holds the interpolated equivalent, not the literal keyword),
+   and any non-`none` filter creates a new stacking context — which then
+   traps a descendant dropdown's z-index inside this step, so it can no
+   longer paint above the *next* step's content once that step has its
+   own content underneath it. Cost a real bug once already; don't re-add. */
 .step { margin-bottom: 26px; }
-.veil { opacity: 0; transform: translateY(14px); filter: blur(3px);
+.veil { opacity: 0; transform: translateY(14px);
         animation: rise .5s var(--ease) forwards; }
-@keyframes rise { to { opacity: 1; transform: none; filter: none; } }
+@keyframes rise { to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
-	.veil { animation: none; opacity: 1; transform: none; filter: none; }
+	.veil { animation: none; opacity: 1; transform: none; }
 }
 
 input[type="text"], input[type="email"] {
@@ -60,9 +95,11 @@ button.go {
 	font: inherit; font-family: var(--disp); font-size: 17px; letter-spacing: .05em;
 	text-transform: uppercase; padding: 11px 20px; background: var(--ink); color: #08080a;
 	border: 1px solid var(--ink); cursor: pointer; margin-top: 20px;
-	transition: background .18s var(--ease);
+	transition: background .18s var(--ease), transform .12s var(--ease);
+	clip-path: polygon(0 8px, 8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
 }
 button.go:hover:not([disabled]) { background: var(--marker); border-color: var(--marker); }
+button.go:active:not([disabled]) { transform: scale(.97); }
 button.go[disabled] { opacity: .3; cursor: not-allowed; }
 
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
@@ -73,17 +110,20 @@ button.go[disabled] { opacity: .3; cursor: not-allowed; }
 .card { border: 1px solid var(--line); background: var(--pane); padding: 11px 12px; margin-bottom: 8px;
         cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; width: 100%;
         text-align: left; color: inherit; font: inherit;
+        clip-path: polygon(0 9px, 9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%);
         transition: border-color .18s var(--ease), transform .18s var(--ease); }
-.card:hover { border-color: #5a5a52; transform: translateX(2px); }
+.card:hover { border-color: #5a5a52; transform: translateX(2px) rotate(-.3deg); }
 .card.on { border-color: var(--marker); box-shadow: inset 0 0 0 1px var(--marker); }
 .card h3 { font-family: var(--disp); font-weight: 400; text-transform: uppercase;
            font-size: 19px; line-height: 1; margin: 0; }
 .meta { font-size: 11px; color: var(--dim); grid-column: 1 / -1; letter-spacing: .05em; text-transform: uppercase; }
 .row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
 .tag { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; border: 1px solid var(--line);
-       color: var(--dim); padding: 2px 6px; }
+       color: var(--dim); padding: 2px 6px; display: inline-block; transform: rotate(-1.4deg); }
+.tag:nth-child(even) { transform: rotate(1.2deg); }
 .tag.hit { background: var(--marker); color: #08080a; border-color: var(--marker); font-weight: 700; }
-.paid { font-size: 9.5px; letter-spacing: .1em; background: var(--stamp); color: #08080a; padding: 2px 6px; }
+.paid { font-size: 9.5px; letter-spacing: .1em; background: var(--stamp); color: #08080a; padding: 2px 6px;
+        display: inline-block; transform: rotate(-3deg); }
 .lvl { font-family: var(--disp); font-size: 14px; letter-spacing: .04em; color: var(--dim); text-transform: uppercase; }
 .expiry.soon { color: var(--stamp); }
 .divider { font-size: 9.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--dim);
@@ -104,15 +144,17 @@ button.go[disabled] { opacity: .3; cursor: not-allowed; }
         color: var(--dim); text-decoration: none; margin-bottom: 14px; }
 .back:hover { color: var(--ink); }
 .board { max-width: 900px; margin: 0 auto 16px; border: 1px solid var(--line);
-         background: var(--pane); padding: 16px; }
+         background: var(--pane); padding: 16px;
+         clip-path: polygon(0 12px, 12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%); }
 .detail { border-color: var(--marker); }
 .detail h2 { font-family: var(--disp); font-weight: 400; text-transform: uppercase;
              font-size: 23px; line-height: 1; margin: 0 0 3px; }
 
 .form { max-width: 560px; }
-.tokenbox { border: 1px solid var(--stamp); padding: 16px; }
+.tokenbox { border: 1px solid var(--stamp); padding: 16px;
+            clip-path: polygon(0 12px, 12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%); }
 .tokenbox h2 { font-family: var(--disp); font-weight: 400; text-transform: uppercase;
-               font-size: 24px; margin: 0 0 8px; color: var(--stamp); }
+               font-size: 24px; margin: 0 0 8px; color: var(--stamp); transform: rotate(-1deg); display: inline-block; }
 .tokenval { font-size: 13px; letter-spacing: .06em; word-break: break-all; background: #08080a;
             border: 1px dashed var(--stamp); padding: 12px; margin: 12px 0; user-select: all; }
 .warn { font-size: 12px; border-left: 2px solid var(--stamp); padding-left: 10px; margin: 12px 0; }
@@ -123,3 +165,6 @@ button.go[disabled] { opacity: .3; cursor: not-allowed; }
 .err { border-left: 2px solid var(--stamp); padding-left: 10px; font-size: 12.5px; margin-top: 14px; }
 .fieldname { font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
              color: var(--dim); margin: 16px 0 5px; }
+.checkline { display: flex; align-items: center; gap: 9px; font-size: 12.5px;
+             text-transform: none; letter-spacing: normal; color: var(--ink); margin: 18px 0 0; }
+.checkline input { width: 16px; height: 16px; accent-color: var(--marker); cursor: pointer; }

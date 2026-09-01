@@ -4,8 +4,12 @@ import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { mintToken, hashToken, publicId, hashIp } from '$lib/server/token';
 import { jitter, type GeoFile } from '$lib/server/geo';
+import { INSTRUMENTS, GENRES } from '$lib/taxonomy';
 import { env } from '$env/dynamic/private';
 import countries from '$lib/data/countries.json';
+
+const INSTRUMENT_SLUGS: Set<string> = new Set(INSTRUMENTS.map(([slug]) => slug));
+const GENRE_SLUGS: Set<string> = new Set(GENRES.map(([slug]) => slug));
 
 const GEO = import.meta.glob('$lib/data/geo/*.json', { eager: true, import: 'default' });
 const geoFor = (cc: string) =>
@@ -26,7 +30,10 @@ export const actions: Actions = {
 		const email = String(f.get('email') ?? '').trim();
 		const address = String(f.get('address') ?? '').trim() || null;
 		const lat = Number(f.get('pin_lat')), lng = Number(f.get('pin_lng'));
-		const values = { bandName, cc, regionCode, social, email, address };
+		const instruments = f.getAll('instrument').map(String).filter((i) => INSTRUMENT_SLUGS.has(i));
+		const genres = f.getAll('genre').map(String).filter((g) => GENRE_SLUGS.has(g));
+		const paid = f.get('paid') === 'on';
+		const values = { bandName, cc, regionCode, social, email, address, instruments, genres, paid };
 
 		const geo = geoFor(cc);
 		if (!bandName) return fail(400, { ...values, error: 'The band needs a name.' });
@@ -34,6 +41,8 @@ export const actions: Actions = {
 		if (!regionCode) return fail(400, { ...values, error: 'Pick a region.' });
 		if (!Number.isFinite(lat) || !Number.isFinite(lng))
 			return fail(400, { ...values, error: 'Drop the pin on the map so people know where to come.' });
+		if (!instruments.length)
+			return fail(400, { ...values, error: 'Pick at least one instrument you need.' });
 		// A generous pad around the country's own frame, not a strict border
 		// check: Leaflet lets you click just past the edge while panning.
 		const [LO0, LO1, LA0, LA1] = geo.bx;
@@ -56,11 +65,11 @@ export const actions: Actions = {
 		try {
 			await db.transaction(async (tx) => {
 				const rows = await tx.execute(sql`
-					insert into ad (public_id, band_name, blurb, commitment, country_code, region_code,
+					insert into ad (public_id, band_name, blurb, commitment, paid, country_code, region_code,
 					                lat, lng, address, display_lat, display_lng,
 					                contact_email, status, verified_at, published_at, edit_token_hash,
 					                created_ip_hash)
-					values (${id}, ${bandName}, '', 'casual', ${cc}, ${regionCode},
+					values (${id}, ${bandName}, '', 'casual', ${paid}, ${cc}, ${regionCode},
 					        ${lat}, ${lng}, ${address}, ${shown.lat}, ${shown.lng},
 					        ${email}, 'published', now(), now(), ${hashToken(token)},
 					        ${hashIp(getClientAddress(), env.IP_SALT ?? 'dev')})
@@ -70,6 +79,12 @@ export const actions: Actions = {
 				await tx.execute(sql`
 					insert into ad_link (ad_id, kind, handle) values (${adId}, ${kind}::link_kind, ${social})
 				`);
+				for (const slug of instruments) {
+					await tx.execute(sql`insert into ad_role (ad_id, instrument) values (${adId}, ${slug})`);
+				}
+				for (const slug of genres) {
+					await tx.execute(sql`insert into ad_genre (ad_id, genre) values (${adId}, ${slug})`);
+				}
 			});
 		} catch (err) {
 			console.error('ad insert failed', err);

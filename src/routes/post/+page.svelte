@@ -3,6 +3,7 @@
 	import Combobox from '$lib/components/Combobox.svelte';
 	import MapView from '$lib/components/MapView.svelte';
 	import { fold } from '$lib/fuzzy';
+	import { INSTRUMENTS, GENRES } from '$lib/taxonomy';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -12,6 +13,9 @@
 	let geo = $state<any>(null);
 	let pin = $state<{ lat: number; lng: number } | null>(null);
 	let bandName = $state('');
+	let inst = $state<string[]>([]);
+	let gen = $state<string[]>([]);
+	let paid = $state(false);
 	let social = $state('');
 	let email = $state('');
 	let copied = $state(false);
@@ -33,7 +37,7 @@
 	const regionItems = $derived(
 		(geo?.regions ?? []).map((r: any) => ({ id: r.k, label: r.k, keys: [fold(r.k)] }))
 	);
-	const ready = $derived(!!(bandName && region && pin && social && email));
+	const ready = $derived(!!(bandName && region && pin && inst.length && social && email));
 
 	async function copy(text: string) {
 		try { await navigator.clipboard.writeText(text); copied = true; } catch { copied = false; }
@@ -81,6 +85,12 @@
 		<input id="band_name" name="band_name" type="text" maxlength="80"
 			bind:value={bandName} placeholder="Rust Verdict" />
 
+		<label for="instruments">What do you need</label>
+		<Combobox items={INSTRUMENTS.map(([id, l]) => ({ id, label: l, keys: [fold(l), id] }))}
+			bind:value={inst} multi label="Instruments" placeholder="drums, bass, vocals"
+			group="Instruments" noMatch="No instrument matches. Try a shorter word." />
+		{#each inst as i}<input type="hidden" name="instrument" value={i} />{/each}
+
 		<label for="country">Country</label>
 		<Combobox items={countryItems} bind:value={cc} flag label="Country"
 			placeholder="Search a country" group="Countries" />
@@ -100,7 +110,7 @@
 
 		<p class="fieldname">Drop the pin{region ? '' : ' (pick a region first)'}</p>
 		{#if geo && region}
-			<MapView {geo} {region} pickable onpick={(p) => (pin = p)} />
+			<MapView {geo} pickable onpick={(p) => (pin = p)} />
 			<p class="hint" style="margin-top:7px">
 				The public map shows this shifted by up to 700m. Nobody gets the exact address of a
 				room full of gear out of a browser.
@@ -110,6 +120,17 @@
 		{/if}
 		<input type="hidden" name="pin_lat" value={pin?.lat ?? ''} />
 		<input type="hidden" name="pin_lng" value={pin?.lng ?? ''} />
+
+		<label for="genres">Genre</label>
+		<Combobox items={GENRES.map(([id, l]) => ({ id, label: l, keys: [fold(l), id] }))}
+			bind:value={gen} multi label="Genres" placeholder="thrash, doom, post-rock"
+			group="Genres" noMatch="No genre matches that." />
+		{#each gen as g}<input type="hidden" name="genre" value={g} />{/each}
+
+		<label class="checkline">
+			<input type="checkbox" name="paid" bind:checked={paid} />
+			This is a paid position
+		</label>
 
 		<label for="social">Where you want to be contacted</label>
 		<input id="social" name="social" type="text" bind:value={social}

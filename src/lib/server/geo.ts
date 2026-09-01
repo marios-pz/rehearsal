@@ -1,5 +1,4 @@
 export type { GeoFile } from '$lib/geo';
-export { project, unproject } from '$lib/geo';
 
 /**
  * The public position. Bands should be findable without publishing the

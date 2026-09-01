@@ -76,7 +76,7 @@
 		</div>
 
 		<div class="right">
-			<MapView {geo} {region} {pins} bind:selected {hot} />
+			<MapView {geo} {pins} bind:selected {hot} />
 			<p class="hint" style="margin-top:8px">Click a card or a pin to see the full ad below.</p>
 		</div>
 	</div>

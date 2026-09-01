@@ -116,7 +116,9 @@
 		display: inline-flex; align-items: center; gap: 6px; background: var(--marker);
 		color: #08080a; font-size: 11.5px; font-weight: 700; letter-spacing: .05em;
 		text-transform: uppercase; padding: 4px 5px 4px 8px; animation: pop .22s var(--ease);
+		transform: rotate(-1.6deg);
 	}
+	.token:nth-child(even) { transform: rotate(1.4deg); }
 	@keyframes pop { from { transform: scale(.8); opacity: 0; } }
 	.token button {
 		font: inherit; background: none; border: 0; color: #08080a; cursor: pointer;
