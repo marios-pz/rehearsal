@@ -56,13 +56,13 @@ These cost time once. Do not rediscover them.
 
 **`sveltekit` comes from `@sveltejs/kit/vite`**, not from `@sveltejs/vite-plugin-svelte`. The wrong import fails with a confusing "does not provide an export named 'sveltekit'".
 
-**Map geometry is build-time, never runtime.** `tools/build-geo.py` produces `src/lib/data/geo/*.json`. Do not add a tile provider, a geocoding API, or a runtime GeoJSON fetch. Each country file is 13 to 38 KB and only the selected one loads.
-
-**Pins counter-scale.** `MapView.svelte` multiplies each pin group by `vb.w / PIN_REF`, so pins hold one screen size at every zoom. Without it, zooming in inflates the label and hides the point it marks.
+**Map region geometry is still build-time; the basemap underneath it is not.** `tools/build-geo.py` produces `src/lib/data/geo/*.json` (pre-projected SVG paths, 13-38 KB per country) exactly as before — do not add a runtime GeoJSON fetch or a geocoding API for that part. What sits underneath changed: `MapView.svelte` now renders real Leaflet tiles from `tile.openstreetmap.org` (dark look via a CSS filter, not a dark-specific tile source, since the free keyless dark CDNs now gate behind an API key). `src/lib/geo.ts` has `pathToLatLngRings()`, which unprojects a region's stored path back to lat/lng so it can be drawn on top of real tiles. If a future dark tile source needs a key, that's one URL to change in `MapView.svelte`, nothing else.
 
 **Overseas territories wreck map framing.** The Netherlands GeoJSON carries the Caribbean and the UK carries out to Gibraltar. Framing on the full bounding box shrinks the mainland to two pixels and the speck filter then deletes it. `build-geo.py` keeps only geometry near the largest landmass. Any new country needs a look at the rendered output, not just a byte count.
 
 **Natural Earth granularity varies wildly.** Greece gets 14 admin-1 units, Germany 16, the UK 232 districts. The UK is dissolved into its 16 ITL-1 regions via the `region` property, configured in `GROUP_BY`. Check the region count when adding a country; anything over about 25 needs grouping or the picker is unusable.
+
+**Leaflet's map instance gets exactly one teardown path.** `MapView.svelte` creates its `L.map()` in `onMount` and removes it in the function `onMount` returns. Also registering a separate `onDestroy(() => map.remove())` calls `.remove()` twice on unmount, which leaves the container in a state where the next `L.map()` on it throws "Map container is being reused by another instance" — intermittently, and only once something actually remounts onto that DOM node, which made it look like a race condition rather than what it was. One cleanup path, not two.
 
 **Form POSTs need a matching origin.** adapter-node rejects cross-site form submissions. When testing with curl, set `ORIGIN` on the server and send an `Origin` header, and send `Accept: text/html` or you get the action payload as JSON instead of a rendered page.
 

@@ -24,15 +24,8 @@
 	const here = $derived(ranked(ads.filter((a: any) => a.region_code === region)));
 	const near = $derived(ranked(ads.filter((a: any) => a.region_code !== region)).slice(0, 8));
 
-	// The map needs frame coordinates; the database stores lat/lng.
-	function toXY(a: any) {
-		const [LO0, LO1, , LA1] = geo.bx;
-		const s = geo.w / (LO1 - LO0);
-		const m = (la: number) => (Math.log(Math.tan(Math.PI / 4 + (la * Math.PI) / 360)) * 180) / Math.PI;
-		return { x: (a.display_lng - LO0) * s, y: (m(LA1) - m(a.display_lat)) * s };
-	}
 	const pins = $derived(here.map((a: any) => ({
-		id: a.public_id, ...toXY(a), paid: a.paid,
+		id: a.public_id, lat: a.display_lat, lng: a.display_lng, paid: a.paid,
 		label: (a.needs[0] ?? '').split('-')[0].toUpperCase()
 	})));
 

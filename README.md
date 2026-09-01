@@ -8,6 +8,103 @@ The thing this replaces is the Instagram story: you had to already follow the
 band, and be looking within 24 hours. Here the ad sits still and is searchable.
 The counterweight is a hard 14 day life, so nothing on the board is stale.
 
+## Architecture
+
+Three layers: a SvelteKit webapp, a Postgres database that does most of the
+work through functions and views, and build-time static data (countries,
+per-country geometry) that never touches a network call at request time.
+
+```mermaid
+graph TB
+    subgraph Browser
+        UI["Combobox / MapView"]
+    end
+
+    subgraph Webapp["SvelteKit webapp"]
+        Home["/  ranked board for a country"]
+        Results["/results  filtered + ranked"]
+        Post["/post  create an ad"]
+        Renew["/renew  extend or edit"]
+        Api["/api/ads  country switch, no reload"]
+        Queries["server/queries.ts"]
+        Geo["server/geo.ts  project / unproject / jitter"]
+        Token["server/token.ts  mint, hash, compare"]
+    end
+
+    subgraph Data["Static data, build time"]
+        Countries["countries.json"]
+        GeoFiles["geo/*.json  pre-projected SVG paths"]
+    end
+
+    subgraph DB["Postgres"]
+        Ad[("ad, ad_role, ad_genre, ad_link")]
+        Ref[("country, region, instrument, genre")]
+        Views[["ad_live / ad_needs_reminder"]]
+        Funcs{{"ping_ad / close_role / delete_ad / reap_expired_ads"}}
+    end
+
+    UI --> Home & Results & Post & Renew & Api
+
+    Home --> Queries & Countries & GeoFiles
+    Results --> Queries & GeoFiles
+    Api --> Queries
+    Post --> Token & Geo
+    Renew --> Funcs
+
+    Queries --> Views
+    Views --> Ad
+    Funcs --> Ad
+    Post --> Ad
+    Home --> Ref
+```
+
+### Webapp
+
+SvelteKit with `adapter-node`, Svelte 5 runes throughout, no stores.
+
+- `src/routes/` &nbsp;`/` (ranked board), `/post` (create), `/renew`
+  (extend or edit by token), `/results` (filtered view reached from `/`),
+  `/api/ads` (JSON, backs the country switch without a full navigation)
+- `src/lib/components/` &nbsp;`Combobox.svelte` (the one picker, used for
+  country, region, instruments, genres), `MapView.svelte` (renders the
+  selected country's geometry, counter-scaled pins)
+- `src/lib/server/` &nbsp;`queries.ts` (the only thing that reads `ad`),
+  `geo.ts` (lon/lat &harr; SVG point, jitter), `token.ts` (mint, hash,
+  constant-time compare), `db/` (Drizzle schema and the lazy connection)
+- `src/lib/fuzzy.ts`, `src/lib/taxonomy.ts` &nbsp;shared scorer and the
+  instrument/genre constants, kept out of the routes so form and results
+  page cannot drift apart
+
+### Database
+
+Postgres, reached through `postgres` + Drizzle, but the invariants live in
+SQL, not in application code, so they hold no matter what calls them.
+
+- **Tables** &nbsp;`ad` (the whole product), `ad_role`, `ad_genre`,
+  `ad_link` (one row per open position, per genre, per contact point),
+  `report`, `rate_bucket` (unused), and the lookup tables `country`,
+  `region`, `instrument`, `genre`
+- **Views** &nbsp;`ad_live` (expiry as a predicate, not a job),
+  `ad_needs_reminder` (selects rows for the day-11 nudge; nothing sends it
+  yet)
+- **Functions** &nbsp;`ping_ad` (`greatest(expires_at, now() + 14 days)`,
+  deliberately non-stacking), `close_role`, `delete_ad` (token-gated
+  mutations, so the token is the only credential that exists),
+  `reap_expired_ads` (exists, unscheduled), `jitter_position` (the
+  700m push behind `display_lat`/`display_lng`)
+- **Migrations** &nbsp;`drizzle/*.sql`, applied in filename order by
+  `scripts/bootstrap.js`, each one hashed and immutable once it has run
+  anywhere
+
+### Deployment
+
+`Dockerfile` is a three-stage build: install and `vite build` with full
+devDependencies, install production dependencies only, then a minimal
+runtime image (`node:24-alpine`, non-root) holding just the compiled
+`build/`, `scripts/`, `drizzle/`, and the `src/lib/data/` JSON that
+`bootstrap.js` still reads at runtime. `docker-compose.yml` adds
+`postgres:18-alpine` alongside it for a self-contained local stack.
+
 ## Running it
 
 ```bash
@@ -89,19 +186,27 @@ publishing the location of a room full of gear.
 
 ## Maps
 
-No tile server, no API key. `src/lib/data/geo/*.json` holds pre-projected SVG
-paths per country: admin-1 regions dissolved from Natural Earth, simplified
-with Ramer-Douglas-Peucker to about one output pixel, 13-38 KB each. Each file
-carries the lon/lat window it was projected from, so the browser can turn a
-click into coordinates and the server can turn coordinates back into a point
-on the same frame.
+`MapView.svelte` renders a real [Leaflet](https://leafletjs.com) map: OSM's
+own keyless tile server (`tile.openstreetmap.org`), with a CSS
+`invert()+hue-rotate()` filter for the dark look, since OSM's tiles have no
+dark render of their own and the free dark basemap CDNs (CARTO) now gate
+theirs behind an API key. No key, no signup; the tradeoff is that OSM's tile
+server is a shared community resource, not a paid CDN, so it's meant for
+apps at this scale, not heavy production traffic. If that ever changes, the
+tile URL is the only place the decision lives.
 
-Only the selected country's file loads. Adding a country is a build-time
-script, not a runtime cost.
+`src/lib/data/geo/*.json` still holds pre-projected SVG paths per country
+(admin-1 regions dissolved from Natural Earth, simplified with
+Ramer-Douglas-Peucker to about one output pixel, 13-38 KB each) — that part
+stayed build-time, unchanged. What changed is what happens with them:
+`pathToLatLngRings()` (`src/lib/geo.ts`) unprojects a region's path back into
+lat/lng at request time, so Leaflet can draw the selected region's outline
+on top of real tiles. The pixel frame each file carries (`bx`, `w`, `h`) is
+what makes that inversion possible without re-deriving a projection.
 
-Pins counter-scale against the viewBox, so they hold one size on screen at
-every zoom level. Zooming in sharpens the location rather than inflating the
-label.
+Posting an ad no longer sends a pixel-space click to the server to unproject;
+Leaflet's own click event already carries real lat/lng, so the browser sends
+that directly and the server only jitters and stores it.
 
 ## Ranking, not filtering
 

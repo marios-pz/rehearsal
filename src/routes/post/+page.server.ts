@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { mintToken, hashToken, publicId, hashIp } from '$lib/server/token';
-import { jitter, unproject, type GeoFile } from '$lib/server/geo';
+import { jitter, type GeoFile } from '$lib/server/geo';
 import { env } from '$env/dynamic/private';
 import countries from '$lib/data/countries.json';
 
@@ -25,20 +25,25 @@ export const actions: Actions = {
 		const social = String(f.get('social') ?? '').trim();
 		const email = String(f.get('email') ?? '').trim();
 		const address = String(f.get('address') ?? '').trim() || null;
-		const px = Number(f.get('pin_x')), py = Number(f.get('pin_y'));
+		const lat = Number(f.get('pin_lat')), lng = Number(f.get('pin_lng'));
 		const values = { bandName, cc, regionCode, social, email, address };
 
 		const geo = geoFor(cc);
 		if (!bandName) return fail(400, { ...values, error: 'The band needs a name.' });
 		if (!geo) return fail(400, { ...values, error: 'No map for that country yet.' });
 		if (!regionCode) return fail(400, { ...values, error: 'Pick a region.' });
-		if (!Number.isFinite(px) || !Number.isFinite(py))
+		if (!Number.isFinite(lat) || !Number.isFinite(lng))
 			return fail(400, { ...values, error: 'Drop the pin on the map so people know where to come.' });
+		// A generous pad around the country's own frame, not a strict border
+		// check: Leaflet lets you click just past the edge while panning.
+		const [LO0, LO1, LA0, LA1] = geo.bx;
+		const pad = Math.max(LO1 - LO0, LA1 - LA0) * 0.5;
+		if (lng < LO0 - pad || lng > LO1 + pad || lat < LA0 - pad || lat > LA1 + pad)
+			return fail(400, { ...values, error: 'That pin landed outside the country. Drop it again.' });
 		if (!social) return fail(400, { ...values, error: 'Give one place where you want to be contacted.' });
 		if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
 			return fail(400, { ...values, error: 'The email is only used for the renewal link. It is never shown.' });
 
-		const { lat, lng } = unproject(geo, px, py);
 		const shown = jitter(lat, lng, 700);
 		const token = mintToken();
 		const id = publicId();

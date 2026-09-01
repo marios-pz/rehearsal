@@ -10,7 +10,7 @@
 	let cc = $state('GR');
 	let region = $state<string | null>(null);
 	let geo = $state<any>(null);
-	let pin = $state<{ x: number; y: number } | null>(null);
+	let pin = $state<{ lat: number; lng: number } | null>(null);
 	let bandName = $state('');
 	let social = $state('');
 	let email = $state('');
@@ -108,8 +108,8 @@
 		{:else}
 			<p class="hint">The map opens once a region is chosen.</p>
 		{/if}
-		<input type="hidden" name="pin_x" value={pin?.x ?? ''} />
-		<input type="hidden" name="pin_y" value={pin?.y ?? ''} />
+		<input type="hidden" name="pin_lat" value={pin?.lat ?? ''} />
+		<input type="hidden" name="pin_lng" value={pin?.lng ?? ''} />
 
 		<label for="social">Where you want to be contacted</label>
 		<input id="social" name="social" type="text" bind:value={social}

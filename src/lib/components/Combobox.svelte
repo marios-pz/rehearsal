@@ -120,7 +120,7 @@
 	@keyframes pop { from { transform: scale(.8); opacity: 0; } }
 	.token button {
 		font: inherit; background: none; border: 0; color: #08080a; cursor: pointer;
-		font-size: 13px; line-height: 1; padding: 0 2px; opacity: .65;
+		font-size: 13px; line-height: 1; padding: 6px 4px; margin: -6px -4px -6px 2px; opacity: .65;
 	}
 	.token button:hover { opacity: 1; }
 	.menu {
