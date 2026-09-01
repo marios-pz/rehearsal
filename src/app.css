@@ -1,7 +1,20 @@
+/* Subset from the Maple Mono NF CN family to Latin + Greek + a few symbols
+   (arrows, punctuation) — the glyphs this UI and its ad content actually
+   use. Anything outside that set (an emoji, a CJK band name) falls through
+   to the rest of the --mono stack, which is the point of listing one. */
+@font-face {
+	font-family: 'Maple Mono'; font-weight: 400; font-style: normal; font-display: swap;
+	src: url('/fonts/maple-mono-web/MapleMono-Regular.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'Maple Mono'; font-weight: 700; font-style: normal; font-display: swap;
+	src: url('/fonts/maple-mono-web/MapleMono-Bold.woff2') format('woff2');
+}
+
 :root {
 	--bg: #08080a; --sea: #050508; --land: #15151b; --land2: #1e1e26; --pane: #101014;
 	--ink: #edebe4; --dim: #75746c; --line: #2c2c28; --marker: #e4ff32; --stamp: #ff4b2e;
-	--mono: ui-monospace, "SFMono-Regular", "Courier New", monospace;
+	--mono: 'Maple Mono', ui-monospace, "SFMono-Regular", "Courier New", monospace;
 	--disp: Impact, Haettenschweiler, "Arial Narrow", "Franklin Gothic Bold", sans-serif;
 	--ease: cubic-bezier(.2, .7, .3, 1);
 }

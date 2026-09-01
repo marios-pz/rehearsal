@@ -30,3 +30,10 @@ build/
 .env.*
 !.env.example
 npm-debug.log*
+
+# Full Maple Mono NF CN family (319MB, Nerd Font icons + CJK charset), kept
+# outside static/ on purpose: static/ is copied whole into the production
+# build, so anything raw in there would ship. This is source material only,
+# to subset from. The site ships static/fonts/maple-mono-web/ instead; see
+# app.css.
+/fonts/
