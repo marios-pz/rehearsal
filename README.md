@@ -1,4 +1,4 @@
-# find-a-band
+# rehearsal
 
 Standing "musicians wanted" ads. A band posts what it is missing and where;
 a musician filters by instrument and genre and contacts the band on the
@@ -7,6 +7,37 @@ socials it already uses. No accounts, no matching, no chat, no CVs.
 The thing this replaces is the Instagram story: you had to already follow the
 band, and be looking within 24 hours. Here the ad sits still and is searchable.
 The counterweight is a hard 14 day life, so nothing on the board is stale.
+
+## Tech stack
+
+**Frontend** &nbsp;SvelteKit 2 on Svelte 5, runes only, no stores, TypeScript
+throughout, `adapter-node` for the build output. Leaflet renders the map
+against OpenStreetMap's keyless tile server, no API key and no separate
+geocoding service. Styling is plain CSS variables in `app.css`, no framework.
+
+**Backend** &nbsp;SvelteKit's own server routes (`+page.server.ts`,
+`+server.ts`) are the whole backend, there is no separate API service.
+`drizzle-orm` sits over the `postgres` (postgres.js) driver. The rules that
+have to hold no matter what calls them, jitter, non-stacking ping, 14 day
+expiry, token hashing, live as Postgres functions and views, not app code.
+
+**Database** &nbsp;PostgreSQL 18, with `pgcrypto`, `citext`, `cube`,
+`earthdistance` and `pg_trgm`. Schema-as-code through Drizzle
+(`schema.ts` &rarr; `db:generate`); functions and views are hand-written SQL
+in `drizzle/`. `scripts/bootstrap.js` is plain Node, no framework, and is
+what actually applies migrations and seeds reference data before the server
+is allowed to start.
+
+**Build tooling** &nbsp;Vite 8, `svelte-check` for types (`npm run check`,
+kept at zero errors and warnings). `tools/build-geo.py` is a one-off Python
+script (`shapely`) that turns Natural Earth shapefiles into the per-country
+JSON geometry, run by hand when a country is added, never at request time.
+`@electric-sql/pglite` is installed but currently unused, nothing references
+it yet.
+
+**Deployment** &nbsp;A multi-stage `Dockerfile` (`node:24-alpine`, non-root)
+and a `docker-compose.yml` that adds `postgres:18-alpine`, for a
+self-contained local or production-like stack with one command.
 
 ## Architecture
 
@@ -131,7 +162,9 @@ half-migrated database serving traffic. It:
    transaction
 5. loads reference data (instruments, genres, 194 countries, 58 regions),
    idempotently, so new entries arrive with the next deploy
-6. seeds demo ads only on a fresh database and only when `SEED_DEMO=true`
+
+Never seeds ads. A fresh database starts with an empty board, on purpose:
+an empty board is honest, a board of fake bands is not.
 
 If any step throws, it prints the failing migration and the Postgres error
 and exits `1`. `npm start` stops there. The server never comes up against a
@@ -146,7 +179,7 @@ Two guards worth knowing about:
 
 ```
 $ npm start
-  find-a-band  database bootstrap
+  rehearsal  database bootstrap
    extensions ok (pgcrypto, citext, cube, earthdistance, pg_trgm)
    database is empty, creating the schema from scratch
    applied 3 migrations: 0000_supreme_champions.sql, 0001_functions.sql, ...
@@ -221,11 +254,12 @@ is what kills a board before its network exists.
 scripts/bootstrap.js        the gate described above
 drizzle/                    migrations, applied in filename order
 src/lib/server/db/schema.ts Drizzle schema, the source of truth
-src/lib/server/geo.ts       project / unproject / jitter
+src/lib/geo.ts              GeoFile type, region name list, country bounds
+src/lib/server/geo.ts       jitter (server-only, everything else is client-safe)
 src/lib/server/token.ts     mint, hash, constant-time compare
-src/lib/components/         Combobox, MapView
+src/lib/components/         Combobox, MapView (Leaflet + OpenStreetMap)
 src/routes/                 / (find), /post, /renew, /api/ads
-src/lib/data/               countries, per-country geometry, demo ads
+src/lib/data/               countries, per-country geometry
 ```
 
 ## Not built yet

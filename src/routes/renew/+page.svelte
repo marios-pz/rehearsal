@@ -1,13 +1,24 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import type { ActionData } from './$types';
-	let { form }: { form: ActionData } = $props();
+	import type { PageData, ActionData } from './$types';
+	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let id = $state('');
 	let token = $state('');
+	const viaNudge = $derived(!!(data.nudgeId && data.nudge) && !form?.renewed);
 </script>
 
-<form class="form step veil" method="POST" use:enhance>
-	<p class="lab">Renew an ad</p>
+{#if viaNudge}
+	<form class="form step veil" method="POST" action="?/nudge" use:enhance>
+		<p class="lab">Renew an ad</p>
+		<p class="hint">One click and it's up for another 14 days.</p>
+		<input type="hidden" name="id" value={data.nudgeId} />
+		<input type="hidden" name="nudge" value={data.nudge} />
+		<button class="go" type="submit">Renew now</button>
+	</form>
+{/if}
+
+<form class="form step veil" method="POST" action="?/ping" use:enhance>
+	<p class="lab">{viaNudge ? 'Or renew by hand' : 'Renew an ad'}</p>
 	<p class="hint">Paste the token you saved. Every ping keeps the ad up for another 14 days.</p>
 
 	<label for="public_id">Ad code</label>

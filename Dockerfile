@@ -31,8 +31,8 @@ ENV NODE_ENV=production \
 
 # adapter-node output, prod-only node_modules, and everything
 # `npm start` needs (db bootstrap gate + immutable migrations). bootstrap.js
-# reads src/lib/data/*.json (countries, geo, demo-ads) directly at runtime,
-# so that directory has to ship too, not just the compiled build.
+# reads src/lib/data/*.json (countries, geo) directly at runtime, so that
+# directory has to ship too, not just the compiled build.
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/build ./build
 COPY package.json ./

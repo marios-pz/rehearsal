@@ -1,16 +1,17 @@
 {
-  "name": "find-a-band",
+  "name": "rehearsal",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npm run db:bootstrap && vite dev",
+    "dev": "npm run db:bootstrap && node --env-file-if-exists=.env node_modules/.bin/vite dev",
     "build": "vite build",
-    "preview": "vite preview",
-    "start": "npm run db:bootstrap && node build/index.js",
-    "db:bootstrap": "node scripts/bootstrap.js",
-    "db:generate": "drizzle-kit generate",
-    "db:studio": "drizzle-kit studio",
+    "preview": "node --env-file-if-exists=.env node_modules/.bin/vite preview",
+    "start": "npm run db:bootstrap && node --env-file-if-exists=.env build/index.js",
+    "db:bootstrap": "node --env-file-if-exists=.env scripts/bootstrap.js",
+    "db:generate": "node --env-file-if-exists=.env node_modules/.bin/drizzle-kit generate",
+    "db:studio": "node --env-file-if-exists=.env node_modules/.bin/drizzle-kit studio",
+    "send-reminders": "node --env-file-if-exists=.env scripts/send-reminders.js",
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
@@ -29,7 +30,8 @@
   "dependencies": {
     "drizzle-orm": "^0.45.2",
     "leaflet": "^1.9.4",
-    "postgres": "^3.4.5"
+    "postgres": "^3.4.5",
+    "resend": "^6.25.0"
   },
   "overrides": {
     "@esbuild-kit/core-utils": {
@@ -38,6 +40,6 @@
     "cookie": "^0.7.0"
   },
   "allowScripts": {
-    "esbuild@0.25.12": true
+    "esbuild@0.28.2": true
   }
 }

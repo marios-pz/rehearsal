@@ -3,7 +3,7 @@
 	import Combobox from '$lib/components/Combobox.svelte';
 	import MapView from '$lib/components/MapView.svelte';
 	import { fold } from '$lib/fuzzy';
-	import { INSTRUMENTS, GENRES } from '$lib/taxonomy';
+	import { INSTRUMENTS, GENRES, COMMITMENTS, SOCIAL_KINDS } from '$lib/taxonomy';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -13,12 +13,16 @@
 	let geo = $state<any>(null);
 	let pin = $state<{ lat: number; lng: number } | null>(null);
 	let bandName = $state('');
+	let blurb = $state('');
 	let inst = $state<string[]>([]);
 	let gen = $state<string[]>([]);
+	let commitment = $state<string>('casual');
 	let paid = $state(false);
-	let social = $state('');
+	let socialKinds = $state<string[]>([]);
+	let socialLinks = $state<Record<string, string>>({});
 	let email = $state('');
-	let copied = $state(false);
+
+	const socialsReady = $derived(socialKinds.some((k) => socialLinks[k]?.trim()));
 
 	$effect(() => { loadGeo(cc); });
 	async function loadGeo(c: string) {
@@ -37,41 +41,19 @@
 	const regionItems = $derived(
 		(geo?.regions ?? []).map((r: any) => ({ id: r.k, label: r.k, keys: [fold(r.k)] }))
 	);
-	const ready = $derived(!!(bandName && region && pin && inst.length && social && email));
-
-	async function copy(text: string) {
-		try { await navigator.clipboard.writeText(text); copied = true; } catch { copied = false; }
-	}
+	const ready = $derived(!!(bandName && region && pin && inst.length && socialsReady && email));
 </script>
 
 {#if form?.posted}
 	<div class="form step veil">
-		<div class="tokenbox">
-			<h2>Save this now</h2>
+		<div class="tokenbox" style="border-color:var(--marker)">
+			<h2 style="color:var(--marker)">Check your email</h2>
 			<p style="font-size:13px;margin:0">
-				The ad for <b>{form.bandName}</b> is live in {form.regionCode}.
+				A confirm link just went to <b>{form.email}</b>. Click it and {form.bandName} goes live.
 			</p>
-
-			<p class="hint" style="margin:14px 0 4px">Ad code</p>
-			<div class="tokenval" style="border-style:solid;border-color:var(--line);color:var(--dim)">
-				{form.publicId}
-			</div>
-
-			<p class="hint" style="margin:14px 0 4px">Token, shown once</p>
-			<div class="tokenval">{form.token}</div>
-			<button class="copy" type="button" onclick={() => copy(`${form.publicId}  ${form.token}`)}>
-				{copied ? 'Copied' : 'Copy both'}
-			</button>
-
-			<div class="warn">
-				This is the only thing that proves the ad is yours. It is shown once.
-				<b>Leave this page and it is gone for good.</b> The server keeps a SHA-256 of it,
-				so nobody, including us, can recover or reset it.
-			</div>
-			<p class="hint">
-				Without it you cannot edit the ad, mark a spot as filled, take it down early, or ping it
-				for another 14 days. A renewal link also goes to your email on day 11, so a lost token
-				is survivable as long as the inbox works.
+			<p class="hint" style="margin-top:12px">
+				Your ad code and edit token arrive by email too, right after you confirm. Neither is
+				shown on this site at any point, and neither can be recovered if the email is lost.
 			</p>
 			<a class="social" href="/post">Post another</a>
 		</div>
@@ -84,6 +66,11 @@
 		<label for="band_name">Band name</label>
 		<input id="band_name" name="band_name" type="text" maxlength="80"
 			bind:value={bandName} placeholder="Rust Verdict" />
+
+		<label for="blurb">What are you looking for</label>
+		<textarea id="blurb" name="blurb" maxlength="600" rows="3" bind:value={blurb}
+			placeholder="Rehearsal twice a week, gigs by spring, into Sabbath and Kyuss more than technical stuff."
+		></textarea>
 
 		<label for="instruments">What do you need</label>
 		<Combobox items={INSTRUMENTS.map(([id, l]) => ({ id, label: l, keys: [fold(l), id] }))}
@@ -127,14 +114,36 @@
 			group="Genres" noMatch="No genre matches that." />
 		{#each gen as g}<input type="hidden" name="genre" value={g} />{/each}
 
+		<label for="commitment">How serious</label>
+		<div class="radiorow">
+			{#each COMMITMENTS as [id, l]}
+				<label class="radiopill" class:on={commitment === id}>
+					<input type="radio" name="commitment" value={id} bind:group={commitment} />
+					{l}
+				</label>
+			{/each}
+		</div>
+
 		<label class="checkline">
 			<input type="checkbox" name="paid" bind:checked={paid} />
 			This is a paid position
 		</label>
 
-		<label for="social">Where you want to be contacted</label>
-		<input id="social" name="social" type="text" bind:value={social}
-			placeholder="instagram.com/yourband" />
+		<label for="socials">Where you want to be contacted</label>
+		<p class="hint" style="margin:0 0 7px">Pick every platform you actually check, then paste each link.</p>
+		<Combobox items={SOCIAL_KINDS.map(([id, l]) => ({ id, label: l, keys: [fold(l), id] }))}
+			bind:value={socialKinds} multi label="Socials" placeholder="instagram, facebook, tiktok"
+			group="Socials" noMatch="No platform matches that." />
+		{#each socialKinds as kind (kind)}
+			<input type="hidden" name="social_kind" value={kind} />
+			<label for="social-{kind}" class="fieldname" style="margin-top:10px">
+				{SOCIAL_KINDS.find(([id]) => id === kind)?.[1] ?? kind} link
+			</label>
+			<input id="social-{kind}" name="social_url" type="text"
+				value={socialLinks[kind] ?? ''}
+				oninput={(e) => (socialLinks[kind] = e.currentTarget.value)}
+				placeholder="https://{kind}.com/yourband" />
+		{/each}
 
 		<label for="email">Your email, for the renewal link only</label>
 		<input id="email" name="email" type="email" bind:value={email} placeholder="you@example.com" />

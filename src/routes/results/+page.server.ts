@@ -15,6 +15,9 @@ export const load: PageServerLoad = async ({ url }) => {
 	const region = url.searchParams.get('r');
 	const inst = (url.searchParams.get('i') ?? '').split(',').filter(Boolean);
 	const gen = (url.searchParams.get('g') ?? '').split(',').filter(Boolean);
+	// Optional, unlike instrument/region/genre: a ranking nudge, not
+	// something a first-time visitor needs to decide before seeing results.
+	const commit = (url.searchParams.get('m') ?? '').split(',').filter(Boolean);
 
 	if (!/^[A-Z]{2}$/.test(cc) || !region || !inst.length || !gen.length) {
 		redirect(302, '/');
@@ -24,5 +27,5 @@ export const load: PageServerLoad = async ({ url }) => {
 	if (!geo) redirect(302, '/');
 
 	const ads = await liveAds(cc);
-	return { cc, region, inst, gen, ads, geo };
+	return { cc, region, inst, gen, commit, ads, geo };
 };

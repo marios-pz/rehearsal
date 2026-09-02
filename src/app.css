@@ -83,12 +83,12 @@ h1.pop:hover { color: #08080a; text-shadow: none; }
 	.veil { animation: none; opacity: 1; transform: none; }
 }
 
-input[type="text"], input[type="email"] {
+input[type="text"], input[type="email"], textarea {
 	font: inherit; width: 100%; background: var(--pane); color: var(--ink);
-	border: 1px solid var(--line); padding: 10px 11px; border-radius: 0;
+	border: 1px solid var(--line); padding: 10px 11px; border-radius: 0; resize: vertical;
 }
-input:focus { border-color: var(--ink); outline: 0; }
-input::placeholder { color: var(--dim); }
+input:focus, textarea:focus { border-color: var(--ink); outline: 0; }
+input::placeholder, textarea::placeholder { color: var(--dim); }
 label { display: block; font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
         color: var(--dim); margin: 16px 0 5px; }
 button.go {
@@ -125,6 +125,7 @@ button.go[disabled] { opacity: .3; cursor: not-allowed; }
 .paid { font-size: 9.5px; letter-spacing: .1em; background: var(--stamp); color: #08080a; padding: 2px 6px;
         display: inline-block; transform: rotate(-3deg); }
 .lvl { font-family: var(--disp); font-size: 14px; letter-spacing: .04em; color: var(--dim); text-transform: uppercase; }
+.lvl.hit { color: var(--marker); }
 .expiry.soon { color: var(--stamp); }
 .divider { font-size: 9.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--dim);
            border-top: 1px solid var(--line); padding-top: 11px; margin: 16px 0 9px; }
@@ -168,3 +169,10 @@ button.go[disabled] { opacity: .3; cursor: not-allowed; }
 .checkline { display: flex; align-items: center; gap: 9px; font-size: 12.5px;
              text-transform: none; letter-spacing: normal; color: var(--ink); margin: 18px 0 0; }
 .checkline input { width: 16px; height: 16px; accent-color: var(--marker); cursor: pointer; }
+
+.radiorow { display: flex; flex-wrap: wrap; gap: 6px; }
+.radiopill { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px;
+             text-transform: none; letter-spacing: normal; color: var(--dim);
+             border: 1px solid var(--line); padding: 6px 10px; cursor: pointer; margin: 0; }
+.radiopill.on { border-color: var(--marker); color: var(--ink); }
+.radiopill input { accent-color: var(--marker); cursor: pointer; }

@@ -11,7 +11,8 @@ const bytea = customType<{ data: Buffer }>({ dataType: () => 'bytea' });
 export const adStatus = pgEnum('ad_status', ['unverified', 'published', 'expired', 'hidden', 'removed']);
 export const commitment = pgEnum('commitment', ['casual', 'serious', 'professional']);
 export const linkKind = pgEnum('link_kind', [
-	'instagram', 'facebook', 'youtube', 'tiktok', 'spotify', 'bandcamp', 'soundcloud', 'website', 'email'
+	'instagram', 'facebook', 'twitter', 'youtube', 'tiktok', 'spotify', 'bandcamp', 'soundcloud',
+	'website', 'email'
 ]);
 
 /* ------------------------------------------------------------------ */
@@ -91,7 +92,23 @@ export const ad = pgTable('ad', {
 
 	// SHA-256 of a token shown exactly once. Storing the hash means a
 	// database leak does not hand out edit rights to every ad on the board.
-	editTokenHash: bytea('edit_token_hash').notNull(),
+	// Null until verification: the token is minted and emailed only once
+	// the poster has proven they hold the contact address, never before.
+	editTokenHash: bytea('edit_token_hash'),
+
+	// A separate, short-lived token for the "click to confirm your email"
+	// link. Cleared (and useless to replay) the moment verification
+	// succeeds, same idea as edit_token_hash: only its hash is ever stored.
+	verifyTokenHash: bytea('verify_token_hash'),
+	verifyExpiresAt: timestamp('verify_expires_at', { withTimezone: true }),
+
+	// Another separate, short-lived, one-time token: the day-11 "renew
+	// now" email link. Deliberately not the edit token — that one is
+	// never persisted in plaintext anywhere, ever, including in a link
+	// minted days after the fact, so this gets its own narrow-purpose
+	// token instead of trying to smuggle the real one forward in time.
+	renewNudgeTokenHash: bytea('renew_nudge_token_hash'),
+	renewNudgeExpiresAt: timestamp('renew_nudge_expires_at', { withTimezone: true }),
 
 	acceptsApplications: boolean('accepts_applications').notNull().default(true),
 	createdIpHash: bytea('created_ip_hash'),

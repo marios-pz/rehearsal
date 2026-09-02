@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Combobox from '$lib/components/Combobox.svelte';
-	import { INSTRUMENTS, GENRES } from '$lib/taxonomy';
+	import { INSTRUMENTS, GENRES, COMMITMENTS } from '$lib/taxonomy';
 	import { fold } from '$lib/fuzzy';
 	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
@@ -16,6 +16,7 @@
 	let region = $state<string | null>(null);
 	let inst = $state<string[]>([]);
 	let gen = $state<string[]>([]);
+	let commit = $state<string[]>([]);
 
 	const countryItems = $derived(
 		data.countries.map((c: any) => ({
@@ -42,6 +43,7 @@
 	function continue_() {
 		if (!ready) return;
 		const q = new URLSearchParams({ c: cc, r: region as string, i: inst.join(','), g: gen.join(',') });
+		if (commit.length) q.set('m', commit.join(','));
 		goto(`/results?${q}`);
 	}
 </script>
@@ -83,6 +85,16 @@
 		<Combobox items={GENRES.map(([id, l]) => ({ id, label: l, keys: [fold(l), id] }))}
 			bind:value={gen} multi label="Genres" placeholder="thrash, doom, post-rock"
 			group="Genres" noMatch="No genre matches that." />
+	</div>
+{/if}
+
+{#if region && gen.length}
+	<div class="step veil">
+		<p class="lab">How serious</p>
+		<p class="hint">Optional. Nudges ranking, does not hide anything — and has nothing to do with paid.</p>
+		<Combobox items={COMMITMENTS.map(([id, l]) => ({ id, label: l, keys: [fold(l), id] }))}
+			bind:value={commit} multi label="Commitment" placeholder="casual, serious, professional"
+			group="Commitment" noMatch="No match for that." />
 	</div>
 {/if}
 

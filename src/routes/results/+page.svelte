@@ -9,16 +9,21 @@
 	const region = $derived(data.region);
 	const inst = $derived(data.inst);
 	const gen = $derived(data.gen);
+	const commit = $derived(data.commit);
 	const ads = $derived(data.ads);
 	const geo = $derived(data.geo);
 
 	let selected = $state<string | null>(null);
 	let hot = $state<string | null>(null);
 
+	// commitment is its own independent signal, same weight class as a
+	// single genre match — never coupled to `paid`, which stays its own
+	// untouched boolean throughout.
 	const score = (a: any) =>
 		(a.needs.some((n: string) => inst.includes(n)) ? 46 : 0) +
 		20 * a.genres.filter((g: string) => gen.includes(g)).length +
-		(a.region_code === region ? 24 : 0);
+		(a.region_code === region ? 24 : 0) +
+		(commit.includes(a.commitment) ? 15 : 0);
 	const ranked = (list: any[]) => [...list].sort((x, y) => score(y) - score(x));
 
 	const here = $derived(ranked(ads.filter((a: any) => a.region_code === region)));
@@ -33,6 +38,10 @@
 	function pick(id: string) {
 		selected = selected === id ? null : id;
 	}
+
+	// Links are stored as whatever URL the poster pasted; only missing the
+	// scheme gets fixed up, nothing else about the link is second-guessed.
+	const toHref = (url: string) => /^https?:\/\//i.test(url) ? url : `https://${url}`;
 </script>
 
 <a class="back" href="/">&larr; Change filters</a>
@@ -46,7 +55,7 @@
 					<button class="card" class:on={selected === a.public_id}
 						onclick={() => pick(a.public_id)}
 						onpointerenter={() => (hot = a.public_id)} onpointerleave={() => (hot = null)}>
-						<h3>{a.band_name}</h3><span class="lvl">{a.commitment}</span>
+						<h3>{a.band_name}</h3><span class="lvl" class:hit={commit.includes(a.commitment)}>{a.commitment}</span>
 						<div class="meta">
 							{a.region_code}{#if a.paid} · <span class="paid">Paid</span>{/if}
 							· <span class="expiry" class:soon={a.days_left <= 3}>{a.days_left}d left</span>
@@ -64,7 +73,7 @@
 					<div class="divider">Elsewhere in {cc}</div>
 					{#each near as a (a.public_id)}
 						<button class="card" class:on={selected === a.public_id} onclick={() => pick(a.public_id)}>
-							<h3>{a.band_name}</h3><span class="lvl">{a.commitment}</span>
+							<h3>{a.band_name}</h3><span class="lvl" class:hit={commit.includes(a.commitment)}>{a.commitment}</span>
 							<div class="meta">{a.region_code} · {a.days_left}d left</div>
 							<div class="row">
 								{#each a.needs as n}<span class="tag" class:hit={inst.includes(n)}>Needs {LABEL[n] ?? n}</span>{/each}
@@ -93,11 +102,13 @@
 			{#each open.needs as n}<span class="tag" class:hit={inst.includes(n)}>Needs {LABEL[n] ?? n}</span>{/each}
 			{#each open.genres as g}<span class="tag" class:hit={gen.includes(g)}>{LABEL[g] ?? g}</span>{/each}
 		</div>
-		{#if open.link_handle}
-			<a class="social" href="#contact" onclick={(e) => e.preventDefault()}>
-				Message on {open.link_kind} &rarr;
-			</a>
-		{/if}
+		<div class="row" style="margin-top:10px">
+			{#each open.links as l}
+				<a class="social" href={toHref(l.handle)} target="_blank" rel="noopener noreferrer nofollow">
+					Message on {l.kind} &rarr;
+				</a>
+			{/each}
+		</div>
 		<p class="hint" style="margin-top:10px">
 			Contact happens on their socials. This board only holds the ad, and it comes down
 			in {open.days_left} day{open.days_left === 1 ? '' : 's'} unless they renew.

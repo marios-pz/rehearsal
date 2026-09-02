@@ -47,7 +47,7 @@ async function main() {
     );
   }
 
-  console.log(c.bold("\n  find-a-band  database bootstrap"));
+  console.log(c.bold("\n  rehearsal  database bootstrap"));
   log(c.dim(url.replace(/:\/\/([^:]+):[^@]+@/, "://$1:***@")));
 
   const sql = postgres(url, { max: 1, onnotice: () => {} });
@@ -254,81 +254,6 @@ async function seedReference(sql) {
     `${countries.length} countries, ${regions} regions`
   );
 }
-
-/* --------------------------------------------------------------------- */
-/* Demo ads, so a fresh clone has something on the board. Never in prod:  */
-/* an empty board is honest, a board of fake bands is not.                */
-/* --------------------------------------------------------------------- */
-async function seedDemoAds(sql) {
-  const demo = JSON.parse(
-    await readFile(join(ROOT, "src/lib/data/demo-ads.json"), "utf8"),
-  );
-  const geoDir = join(ROOT, "src/lib/data/geo");
-  let n = 0;
-
-  for (const [cc, ads] of Object.entries(demo)) {
-    const geo = JSON.parse(await readFile(join(geoDir, `${cc}.json`), "utf8"));
-    const [LO0, LO1, , LA1] = geo.bx;
-    const S = geo.w / (LO1 - LO0);
-    const merc = (la) =>
-      (Math.log(Math.tan(Math.PI / 4 + (la * Math.PI) / 360)) * 180) / Math.PI;
-    const invMerc = (m) =>
-      (Math.atan(Math.exp((m * Math.PI) / 180)) * 360) / Math.PI - 90;
-    const Y1 = merc(LA1);
-
-    for (const a of ads) {
-      const lat = invMerc(Y1 - a.y / S);
-      const lng = LO0 + a.x / S;
-      const jit = jitter(lat, lng, 700);
-      const token = randomToken();
-
-      const [row] = await sql`
-				insert into ad (public_id, band_name, blurb, commitment, paid,
-				                country_code, region_code, lat, lng, display_lat, display_lng,
-				                contact_email, status, verified_at, published_at,
-				                expires_at, edit_token_hash)
-				values (${publicId()}, ${a.n}, ${a.note}, ${a.lvl}, ${a.paid},
-				        ${cc}, ${a.r}, ${lat}, ${lng}, ${jit.lat}, ${jit.lng},
-				        ${`demo+${n}@example.invalid`}, 'published', now(), now(),
-				        now() + (${a.days} || ' days')::interval,
-				        digest(${token}, 'sha256'))
-				returning id
-			`;
-      for (const ins of a.need) {
-        await sql`insert into ad_role (ad_id, instrument) values (${row.id}, ${ins})
-				          on conflict do nothing`;
-      }
-      for (const g of a.g) {
-        await sql`insert into ad_genre (ad_id, genre) values (${row.id}, ${g})
-				          on conflict do nothing`;
-      }
-      await sql`insert into ad_link (ad_id, kind, handle)
-			          values (${row.id}, ${a.soc}, ${"@" + a.n.toLowerCase().replace(/\W+/g, "")})
-			          on conflict do nothing`;
-      n++;
-    }
-  }
-  return n;
-}
-
-function jitter(lat, lng, metres) {
-  const ang = Math.random() * 2 * Math.PI;
-  const rad = Math.sqrt(Math.random()) * metres;
-  return {
-    lat: lat + (rad * Math.cos(ang)) / 111320,
-    lng:
-      lng + (rad * Math.sin(ang)) / (111320 * Math.cos((lat * Math.PI) / 180)),
-  };
-}
-const ALPHA = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-const randomToken = () =>
-  [...crypto.getRandomValues(new Uint8Array(20))]
-    .map((b) => ALPHA[b & 31])
-    .join("");
-const publicId = () =>
-  [...crypto.getRandomValues(new Uint8Array(6))]
-    .map((b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31])
-    .join("");
 
 main().catch((err) => {
   console.error(c.red("\n   bootstrap failed, the server will not start\n"));

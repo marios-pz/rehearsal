@@ -35,7 +35,6 @@ services:
       # adapter-node checks the Origin header on form POSTs against this.
       ORIGIN: ${ORIGIN:-http://localhost:3000}
       PORT: 3000
-      SEED_DEMO: ${SEED_DEMO:-false}
     ports:
       - "3000:3000"
 

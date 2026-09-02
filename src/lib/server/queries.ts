@@ -1,6 +1,8 @@
 import { sql } from 'drizzle-orm';
 import { db } from './db';
 
+export type AdLink = { kind: string; handle: string };
+
 export type AdRow = {
 	public_id: string; band_name: string; blurb: string;
 	region_code: string; country_code: string;
@@ -8,7 +10,7 @@ export type AdRow = {
 	commitment: 'casual' | 'serious' | 'professional';
 	paid: boolean; days_left: number;
 	needs: string[]; genres: string[];
-	link_kind: string | null; link_handle: string | null;
+	links: AdLink[];
 };
 
 /**
@@ -25,8 +27,8 @@ export async function liveAds(countryCode: string): Promise<AdRow[]> {
 		       coalesce(array(select r.instrument from ad_role r
 		                       where r.ad_id = a.id and r.filled_at is null), '{}') as needs,
 		       coalesce(array(select g.genre from ad_genre g where g.ad_id = a.id), '{}') as genres,
-		       (select l.kind::text from ad_link l where l.ad_id = a.id limit 1) as link_kind,
-		       (select l.handle from ad_link l where l.ad_id = a.id limit 1) as link_handle
+		       coalesce((select json_agg(json_build_object('kind', l.kind::text, 'handle', l.handle))
+		                 from ad_link l where l.ad_id = a.id), '[]') as links
 		from ad_live a
 		where a.country_code = ${countryCode}
 		order by a.published_at desc
@@ -46,6 +48,27 @@ export async function adCountsByCountry(): Promise<Record<string, number>> {
 export async function pingAd(publicId: string, token: string): Promise<Date | null> {
 	const rows = await db.execute(sql`
 		select ping_ad(${publicId}, ${token.trim().toUpperCase()}) as expires_at
+	`);
+	const v = (rows as unknown as { expires_at: string | null }[])[0]?.expires_at;
+	return v ? new Date(v) : null;
+}
+
+/** The verify-link click. On success the ad flips to published; the edit
+ *  token itself is minted separately, by the caller, only once this
+ *  returns true. */
+export async function verifyAd(publicId: string, verifyToken: string): Promise<boolean> {
+	const rows = await db.execute(sql`
+		select verify_ad(${publicId}, ${verifyToken.trim().toUpperCase()}) as ok
+	`);
+	return Boolean((rows as unknown as { ok: boolean }[])[0]?.ok);
+}
+
+/** The day-11 reminder email's "renew now" link: a single-use token minted
+ *  just for that email, never the real edit token (see the migration
+ *  comment for why). */
+export async function renewViaNudge(publicId: string, nudgeToken: string): Promise<Date | null> {
+	const rows = await db.execute(sql`
+		select renew_via_nudge(${publicId}, ${nudgeToken.trim().toUpperCase()}) as expires_at
 	`);
 	const v = (rows as unknown as { expires_at: string | null }[])[0]?.expires_at;
 	return v ? new Date(v) : null;

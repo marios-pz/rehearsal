@@ -8,6 +8,20 @@
       "when": 1788275818745,
       "tag": "0000_supreme_champions",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788343148030,
+      "tag": "0003_verify_and_renew",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788344886941,
+      "tag": "0004_link_kind_twitter",
+      "breakpoints": true
     }
   ]
 }

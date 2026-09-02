@@ -15,4 +15,20 @@ export const GENRES = [
 	['indie', 'Indie']
 ] as const;
 
-export const LABEL: Record<string, string> = Object.fromEntries([...INSTRUMENTS, ...GENRES]);
+/** Matches the `commitment` enum in schema.ts. A ranking weight like genre,
+ *  never a hard filter, and never coupled to the separate `paid` boolean. */
+export const COMMITMENTS = [
+	['casual', 'Casual'], ['serious', 'Serious'], ['professional', 'Professional']
+] as const;
+
+/** Matches the `link_kind` enum in schema.ts, minus `email`: that one stays
+ *  the private renewal-link address, not a public contact option here. */
+export const SOCIAL_KINDS = [
+	['instagram', 'Instagram'], ['facebook', 'Facebook'], ['twitter', 'Twitter / X'],
+	['tiktok', 'TikTok'], ['youtube', 'YouTube'], ['spotify', 'Spotify'],
+	['bandcamp', 'Bandcamp'], ['soundcloud', 'SoundCloud'], ['website', 'Website']
+] as const;
+
+export const LABEL: Record<string, string> = Object.fromEntries([
+	...INSTRUMENTS, ...GENRES, ...COMMITMENTS, ...SOCIAL_KINDS
+]);
