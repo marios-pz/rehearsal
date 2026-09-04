@@ -22,6 +22,20 @@
       "when": 1788344886941,
       "tag": "0004_link_kind_twitter",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788444645628,
+      "tag": "0005_ad_view_count",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788458562342,
+      "tag": "0007_ad_kind",
+      "breakpoints": true
     }
   ]
 }

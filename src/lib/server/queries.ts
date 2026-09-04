@@ -8,7 +8,10 @@ export type AdRow = {
 	region_code: string; country_code: string;
 	display_lat: number; display_lng: number;
 	commitment: 'casual' | 'serious' | 'professional';
+	kind: 'member' | 'gig' | 'rehearsal';
+	event_at: string | null;
 	paid: boolean; days_left: number;
+	view_count: number;
 	needs: string[]; genres: string[];
 	links: AdLink[];
 };
@@ -22,7 +25,8 @@ export type AdRow = {
 export async function liveAds(countryCode: string): Promise<AdRow[]> {
 	const rows = await db.execute(sql`
 		select a.public_id, a.band_name, a.blurb, a.region_code, a.country_code,
-		       a.display_lat, a.display_lng, a.commitment, a.paid,
+		       a.display_lat, a.display_lng, a.commitment, a.kind, a.event_at,
+		       a.paid, a.view_count,
 		       greatest(0, ceil(extract(epoch from a.expires_at - now()) / 86400))::int as days_left,
 		       coalesce(array(select r.instrument from ad_role r
 		                       where r.ad_id = a.id and r.filled_at is null), '{}') as needs,
@@ -43,6 +47,19 @@ export async function adCountsByCountry(): Promise<Record<string, number>> {
 	return Object.fromEntries(
 		(rows as unknown as { country_code: string; n: number }[]).map((r) => [r.country_code, r.n])
 	);
+}
+
+/** The click that opens an ad's full detail. Counted in the database, keyed
+ *  on a hashed viewer so refresh-spam on the same ad within the window is
+ *  absorbed rather than inflating the count; see record_ad_view(). Returns
+ *  null for an id that is not (or no longer) live, same as a bad token
+ *  elsewhere: nothing here distinguishes "wrong id" from "expired". */
+export async function recordAdView(publicId: string, viewerHash: Buffer): Promise<number | null> {
+	const rows = await db.execute(sql`
+		select record_ad_view(${publicId}, ${viewerHash.toString('hex')}) as view_count
+	`);
+	const v = (rows as unknown as { view_count: number | null }[])[0]?.view_count;
+	return v ?? null;
 }
 
 export async function pingAd(publicId: string, token: string): Promise<Date | null> {

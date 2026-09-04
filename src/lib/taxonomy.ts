@@ -21,6 +21,14 @@ export const COMMITMENTS = [
 	['casual', 'Casual'], ['serious', 'Serious'], ['professional', 'Professional']
 ] as const;
 
+/** Matches the `ad_kind` enum in schema.ts. `gig` and `rehearsal` are the
+ *  same mechanism underneath (a dated, short-term ask with `event_at` set)
+ *  and differ only in label; `member` is the original, undated, standing
+ *  "wanted" post. */
+export const AD_KINDS = [
+	['member', 'Looking for a member'], ['gig', 'One-off gig'], ['rehearsal', 'Rehearsal / fill-in']
+] as const;
+
 /** Matches the `link_kind` enum in schema.ts, minus `email`: that one stays
  *  the private renewal-link address, not a public contact option here. */
 export const SOCIAL_KINDS = [
@@ -30,5 +38,5 @@ export const SOCIAL_KINDS = [
 ] as const;
 
 export const LABEL: Record<string, string> = Object.fromEntries([
-	...INSTRUMENTS, ...GENRES, ...COMMITMENTS, ...SOCIAL_KINDS
+	...INSTRUMENTS, ...GENRES, ...COMMITMENTS, ...SOCIAL_KINDS, ...AD_KINDS
 ]);

@@ -3,7 +3,7 @@
 	import { INSTRUMENTS, GENRES, COMMITMENTS } from '$lib/taxonomy';
 	import { fold } from '$lib/fuzzy';
 	import { goto } from '$app/navigation';
-	import { untrack } from 'svelte';
+	import { untrack, onMount } from 'svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -17,6 +17,37 @@
 	let inst = $state<string[]>([]);
 	let gen = $state<string[]>([]);
 	let commit = $state<string[]>([]);
+
+	// Session-only, not localStorage: a stray refresh or a "Change filters"
+	// trip back here from /results shouldn't throw the whole selection
+	// away, but a filter chosen last week has no business resurfacing.
+	const SESSION_KEY = 'rehearsal:filters';
+	let restored = $state(false);
+
+	onMount(() => {
+		try {
+			const raw = sessionStorage.getItem(SESSION_KEY);
+			if (!raw) { restored = true; return; }
+			const saved = JSON.parse(raw);
+			const apply = () => {
+				region = saved.region ?? null;
+				inst = Array.isArray(saved.inst) ? saved.inst : [];
+				gen = Array.isArray(saved.gen) ? saved.gen : [];
+				commit = Array.isArray(saved.commit) ? saved.commit : [];
+				restored = true;
+			};
+			if (saved.cc && saved.cc !== cc) switchCountry(saved.cc).then(apply);
+			else apply();
+		} catch {
+			restored = true;
+		}
+	});
+
+	$effect(() => {
+		if (!restored) return;
+		const snapshot = { cc, region, inst, gen, commit };
+		try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(snapshot)); } catch { /* private mode etc */ }
+	});
 
 	const countryItems = $derived(
 		data.countries.map((c: any) => ({

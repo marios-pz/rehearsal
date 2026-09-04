@@ -25,7 +25,11 @@
 			<a class="pop" href="/" aria-current={page.url.pathname === '/' ? 'page' : undefined}>Find</a>
 			<a class="pop" href="/post" aria-current={page.url.pathname === '/post' ? 'page' : undefined}>Post</a>
 			<a class="pop" href="/renew" aria-current={page.url.pathname === '/renew' ? 'page' : undefined}>Renew</a>
+			<a class="pop" href="/support" aria-current={page.url.pathname === '/support' ? 'page' : undefined}>Support</a>
 		</nav>
 	</div>
 	{@render children()}
+	<a class="coffee-fab torn" href="https://buymeacoffee.com/mariospz" target="_blank" rel="noopener noreferrer">
+		Buy me a coffee
+	</a>
 </div>

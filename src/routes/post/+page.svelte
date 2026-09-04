@@ -3,7 +3,8 @@
 	import Combobox from '$lib/components/Combobox.svelte';
 	import MapView from '$lib/components/MapView.svelte';
 	import { fold } from '$lib/fuzzy';
-	import { INSTRUMENTS, GENRES, COMMITMENTS, SOCIAL_KINDS } from '$lib/taxonomy';
+	import { INSTRUMENTS, GENRES, COMMITMENTS, SOCIAL_KINDS, AD_KINDS } from '$lib/taxonomy';
+	import { onMount } from 'svelte';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -14,9 +15,17 @@
 	let pin = $state<{ lat: number; lng: number } | null>(null);
 	let bandName = $state('');
 	let blurb = $state('');
+	let address = $state('');
 	let inst = $state<string[]>([]);
 	let gen = $state<string[]>([]);
 	let commitment = $state<string>('casual');
+	let kind = $state<string>('member');
+	// A bare datetime-local value ("2026-09-10T19:00") has no timezone, so
+	// it's converted to a real ISO instant right here, in the browser,
+	// using the browser's own timezone (the poster's) — the hidden field
+	// actually submitted carries that ISO string, not the raw input value.
+	let eventAtLocal = $state('');
+	const eventAtIso = $derived(eventAtLocal ? new Date(eventAtLocal).toISOString() : '');
 	let paid = $state(false);
 	let socialKinds = $state<string[]>([]);
 	let socialLinks = $state<Record<string, string>>({});
@@ -32,6 +41,70 @@
 		region = null; pin = null;
 	}
 
+	// A half-written ad is real work too, same reasoning as the find-page
+	// filters: session-only (not localStorage), and cleared the moment a
+	// submission actually goes through so the next visit starts blank.
+	const SESSION_KEY = 'rehearsal:post-draft';
+	let restored = $state(false);
+	// region/pin are set by loadGeo's own country-change reset, so a
+	// restored draft's region/pin are staged here and only applied once
+	// `geo` has settled for the restored country — otherwise loadGeo's
+	// reset (which runs asynchronously, after `cc` is restored) would
+	// stomp them right back to null.
+	let pendingRegion = $state<string | null>(null);
+	let pendingPin = $state<{ lat: number; lng: number } | null>(null);
+
+	onMount(() => {
+		try {
+			const raw = sessionStorage.getItem(SESSION_KEY);
+			if (raw) {
+				const saved = JSON.parse(raw);
+				bandName = saved.bandName ?? '';
+				blurb = saved.blurb ?? '';
+				address = saved.address ?? '';
+				commitment = saved.commitment ?? 'casual';
+				kind = saved.kind ?? 'member';
+				eventAtLocal = saved.eventAtLocal ?? '';
+				paid = !!saved.paid;
+				inst = Array.isArray(saved.inst) ? saved.inst : [];
+				gen = Array.isArray(saved.gen) ? saved.gen : [];
+				socialKinds = Array.isArray(saved.socialKinds) ? saved.socialKinds : [];
+				socialLinks = saved.socialLinks && typeof saved.socialLinks === 'object' ? saved.socialLinks : {};
+				email = saved.email ?? '';
+				pendingRegion = saved.region ?? null;
+				pendingPin = saved.pin ?? null;
+				if (saved.cc) cc = saved.cc;
+			}
+		} catch {
+			/* ignore a corrupt or inaccessible session entry */
+		} finally {
+			restored = true;
+		}
+	});
+
+	$effect(() => {
+		if (!geo || (!pendingRegion && !pendingPin)) return;
+		region = pendingRegion;
+		pin = pendingPin;
+		pendingRegion = null;
+		pendingPin = null;
+	});
+
+	$effect(() => {
+		if (!restored) return;
+		const snapshot = {
+			cc, region, pin, bandName, blurb, address, inst, gen, commitment, kind, eventAtLocal, paid,
+			socialKinds, socialLinks, email
+		};
+		try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(snapshot)); } catch { /* private mode etc */ }
+	});
+
+	$effect(() => {
+		if (form?.posted) {
+			try { sessionStorage.removeItem(SESSION_KEY); } catch { /* private mode etc */ }
+		}
+	});
+
 	const countryItems = $derived(
 		data.countries.map((c: any) => ({
 			id: c.c, label: c.n, sub: c.v && c.v !== c.n ? c.v : null, keys: c.k,
@@ -41,7 +114,10 @@
 	const regionItems = $derived(
 		(geo?.regions ?? []).map((r: any) => ({ id: r.k, label: r.k, keys: [fold(r.k)] }))
 	);
-	const ready = $derived(!!(bandName && region && pin && inst.length && socialsReady && email));
+	const ready = $derived(!!(
+		bandName && region && pin && inst.length && socialsReady && email &&
+		(kind === 'member' || eventAtLocal)
+	));
 </script>
 
 {#if form?.posted}
@@ -62,6 +138,26 @@
 	<form class="form step veil" method="POST" use:enhance>
 		<p class="lab">Post an ad</p>
 		<p class="hint">No account, no password. It runs for 14 days and then it is deleted.</p>
+
+		<label for="kind">What kind of post is this</label>
+		<div class="radiorow">
+			{#each AD_KINDS as [id, l]}
+				<label class="radiopill" class:on={kind === id}>
+					<input type="radio" name="kind" value={id} bind:group={kind} />
+					{l}
+				</label>
+			{/each}
+		</div>
+
+		{#if kind !== 'member'}
+			<label for="event_at">{kind === 'gig' ? 'When the gig is' : 'When the rehearsal is'}</label>
+			<input id="event_at" type="datetime-local" bind:value={eventAtLocal} />
+			<p class="hint" style="margin-top:5px">
+				How urgent this reads takes care of itself: a rehearsal tonight looks different from
+				one three weeks out just from the date, nothing else is needed for that.
+			</p>
+		{/if}
+		<input type="hidden" name="event_at" value={kind !== 'member' ? eventAtIso : ''} />
 
 		<label for="band_name">Band name</label>
 		<input id="band_name" name="band_name" type="text" maxlength="80"
@@ -93,7 +189,7 @@
 		<input type="hidden" name="region" value={region ?? ''} />
 
 		<label for="address">Rehearsal room or studio address</label>
-		<input id="address" name="address" type="text" placeholder="Kallidromiou 42, Exarchia" />
+		<input id="address" name="address" type="text" bind:value={address} placeholder="Kallidromiou 42, Exarchia" />
 
 		<p class="fieldname">Drop the pin{region ? '' : ' (pick a region first)'}</p>
 		{#if geo && region}

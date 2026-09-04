@@ -10,6 +10,9 @@ const bytea = customType<{ data: Buffer }>({ dataType: () => 'bytea' });
 
 export const adStatus = pgEnum('ad_status', ['unverified', 'published', 'expired', 'hidden', 'removed']);
 export const commitment = pgEnum('commitment', ['casual', 'serious', 'professional']);
+// `gig` and `rehearsal` share the same mechanism (a dated, short-term ask,
+// see ad.eventAt below); `member` is the original standing, undated post.
+export const adKind = pgEnum('ad_kind', ['member', 'gig', 'rehearsal']);
 export const linkKind = pgEnum('link_kind', [
 	'instagram', 'facebook', 'twitter', 'youtube', 'tiktok', 'spotify', 'bandcamp', 'soundcloud',
 	'website', 'email'
@@ -57,6 +60,12 @@ export const ad = pgTable('ad', {
 	blurb: text('blurb').notNull().default(''),
 	commitment: commitment('commitment').notNull(),
 	paid: boolean('paid').notNull().default(false),
+
+	// `member` is the original, undated, standing "wanted" post. `gig` and
+	// `rehearsal` are a dated, short-term ask instead: eventAt is required
+	// for those two and left null for `member`, enforced below.
+	kind: adKind('kind').notNull().default('member'),
+	eventAt: timestamp('event_at', { withTimezone: true }),
 
 	countryCode: char('country_code', { length: 2 }).notNull().references(() => country.code),
 	regionCode: text('region_code'),
@@ -111,6 +120,10 @@ export const ad = pgTable('ad', {
 	renewNudgeExpiresAt: timestamp('renew_nudge_expires_at', { withTimezone: true }),
 
 	acceptsApplications: boolean('accepts_applications').notNull().default(true),
+	// Counted server-side by record_ad_view(), never incremented directly
+	// from a client-supplied number. One row in rate_bucket per (ad, hashed
+	// viewer) absorbs refresh-spam within its window; see 0006_ad_views.sql.
+	viewCount: integer('view_count').notNull().default(0),
 	createdIpHash: bytea('created_ip_hash'),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
@@ -123,7 +136,9 @@ export const ad = pgTable('ad', {
 	check('lat_range', sql`${t.lat} between -90 and 90`),
 	check('lng_range', sql`${t.lng} between -180 and 180`),
 	check('published_implies_verified',
-		sql`${t.status} <> 'published' or ${t.verifiedAt} is not null`)
+		sql`${t.status} <> 'published' or ${t.verifiedAt} is not null`),
+	check('event_at_matches_kind',
+		sql`(${t.kind} = 'member') = (${t.eventAt} is null)`)
 ]);
 
 /* An ad routinely needs a drummer AND a bassist and fills them at
