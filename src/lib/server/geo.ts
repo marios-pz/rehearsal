@@ -1,5 +1,3 @@
-export type { GeoFile } from '$lib/geo';
-
 /**
  * The public position. Bands should be findable without publishing the
  * street address of a room full of gear, so the pin the world sees is the

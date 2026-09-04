@@ -22,8 +22,7 @@ create extension if not exists pg_trgm;       -- fuzzy city + band search
 
 create table country (
   code        char(2) primary key,            -- ISO 3166-1 alpha-2
-  name_en     text    not null,
-  has_geo     boolean not null default false  -- do we ship a map file for it
+  name_en     text    not null
 );
 
 create table city (
@@ -69,10 +68,10 @@ create table ad (
   commitment    commitment not null,
   paid          boolean not null default false,
 
-  -- Location. country + region are how people search; the pin is how they
-  -- judge whether they can actually get to a rehearsal. Both are required.
+  -- Location. Country is how people search (ranked further by distance
+  -- from the searching musician's own geolocation, never a hard filter);
+  -- the pin is how they judge whether they can actually get to a rehearsal.
   country_code  char(2) not null references country(code),
-  region_code   text,                         -- admin-1 key, e.g. 'Attiki'
   city_id       bigint references city(id),
 
   -- Exact position of the rehearsal room, as dropped on the map. Private.
@@ -117,7 +116,7 @@ create table ad (
     check (status <> 'published' or verified_at is not null)
 );
 
-create index ad_country_idx on ad (country_code, region_code, expires_at desc) where status = 'published';
+create index ad_country_idx on ad (country_code, expires_at desc) where status = 'published';
 create index ad_earth_idx   on ad using gist (ll_to_earth(display_lat, display_lng)) where status = 'published';
 create index ad_name_trgm   on ad using gin (band_name gin_trgm_ops);
 create index ad_expiry_idx  on ad (expires_at) where status = 'published';

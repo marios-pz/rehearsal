@@ -10,8 +10,6 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let cc = $state('GR');
-	let region = $state<string | null>(null);
-	let geo = $state<any>(null);
 	let pin = $state<{ lat: number; lng: number } | null>(null);
 	let bandName = $state('');
 	let blurb = $state('');
@@ -33,26 +31,11 @@
 
 	const socialsReady = $derived(socialKinds.some((k) => socialLinks[k]?.trim()));
 
-	$effect(() => { loadGeo(cc); });
-	async function loadGeo(c: string) {
-		geo = data.withGeo.includes(c)
-			? (await import(`$lib/data/geo/${c}.json`)).default
-			: null;
-		region = null; pin = null;
-	}
-
 	// A half-written ad is real work too, same reasoning as the find-page
 	// filters: session-only (not localStorage), and cleared the moment a
 	// submission actually goes through so the next visit starts blank.
 	const SESSION_KEY = 'rehearsal:post-draft';
 	let restored = $state(false);
-	// region/pin are set by loadGeo's own country-change reset, so a
-	// restored draft's region/pin are staged here and only applied once
-	// `geo` has settled for the restored country — otherwise loadGeo's
-	// reset (which runs asynchronously, after `cc` is restored) would
-	// stomp them right back to null.
-	let pendingRegion = $state<string | null>(null);
-	let pendingPin = $state<{ lat: number; lng: number } | null>(null);
 
 	onMount(() => {
 		try {
@@ -71,8 +54,7 @@
 				socialKinds = Array.isArray(saved.socialKinds) ? saved.socialKinds : [];
 				socialLinks = saved.socialLinks && typeof saved.socialLinks === 'object' ? saved.socialLinks : {};
 				email = saved.email ?? '';
-				pendingRegion = saved.region ?? null;
-				pendingPin = saved.pin ?? null;
+				pin = saved.pin ?? null;
 				if (saved.cc) cc = saved.cc;
 			}
 		} catch {
@@ -83,17 +65,9 @@
 	});
 
 	$effect(() => {
-		if (!geo || (!pendingRegion && !pendingPin)) return;
-		region = pendingRegion;
-		pin = pendingPin;
-		pendingRegion = null;
-		pendingPin = null;
-	});
-
-	$effect(() => {
 		if (!restored) return;
 		const snapshot = {
-			cc, region, pin, bandName, blurb, address, inst, gen, commitment, kind, eventAtLocal, paid,
+			cc, pin, bandName, blurb, address, inst, gen, commitment, kind, eventAtLocal, paid,
 			socialKinds, socialLinks, email
 		};
 		try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(snapshot)); } catch { /* private mode etc */ }
@@ -107,15 +81,11 @@
 
 	const countryItems = $derived(
 		data.countries.map((c: any) => ({
-			id: c.c, label: c.n, sub: c.v && c.v !== c.n ? c.v : null, keys: c.k,
-			right: data.withGeo.includes(c.c) ? '' : 'no map yet'
+			id: c.c, label: c.n, sub: c.v && c.v !== c.n ? c.v : null, keys: c.k
 		}))
 	);
-	const regionItems = $derived(
-		(geo?.regions ?? []).map((r: any) => ({ id: r.k, label: r.k, keys: [fold(r.k)] }))
-	);
 	const ready = $derived(!!(
-		bandName && region && pin && inst.length && socialsReady && email &&
+		bandName && pin && inst.length && socialsReady && email &&
 		(kind === 'member' || eventAtLocal)
 	));
 </script>
@@ -179,28 +149,15 @@
 			placeholder="Search a country" group="Countries" />
 		<input type="hidden" name="country" value={cc} />
 
-		<label for="region">Region</label>
-		{#if geo}
-			<Combobox items={regionItems} bind:value={region} label="Region"
-				placeholder="Search a region" group="Regions" noMatch="No region matches that." />
-		{:else}
-			<p class="hint">No map for this country yet, so ads cannot be placed on it.</p>
-		{/if}
-		<input type="hidden" name="region" value={region ?? ''} />
-
 		<label for="address">Rehearsal room or studio address</label>
 		<input id="address" name="address" type="text" bind:value={address} placeholder="Kallidromiou 42, Exarchia" />
 
-		<p class="fieldname">Drop the pin{region ? '' : ' (pick a region first)'}</p>
-		{#if geo && region}
-			<MapView {geo} pickable onpick={(p) => (pin = p)} />
-			<p class="hint" style="margin-top:7px">
-				The public map shows this shifted by up to 700m. Nobody gets the exact address of a
-				room full of gear out of a browser.
-			</p>
-		{:else}
-			<p class="hint">The map opens once a region is chosen.</p>
-		{/if}
+		<p class="fieldname">Drop the pin</p>
+		<MapView pickable onpick={(p) => (pin = p)} />
+		<p class="hint" style="margin-top:7px">
+			The public map shows this shifted by up to 700m. Nobody gets the exact address of a
+			room full of gear out of a browser.
+		</p>
 		<input type="hidden" name="pin_lat" value={pin?.lat ?? ''} />
 		<input type="hidden" name="pin_lng" value={pin?.lng ?? ''} />
 

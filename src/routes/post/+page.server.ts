@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { mintToken, hashToken, publicId, hashIp } from '$lib/server/token';
-import { jitter, type GeoFile } from '$lib/server/geo';
+import { jitter } from '$lib/server/geo';
 import { sendVerificationEmail } from '$lib/server/email';
 import { INSTRUMENTS, GENRES, COMMITMENTS, SOCIAL_KINDS, AD_KINDS } from '$lib/taxonomy';
 import { env } from '$env/dynamic/private';
@@ -15,14 +15,7 @@ const COMMITMENT_SLUGS: Set<string> = new Set(COMMITMENTS.map(([slug]) => slug))
 const SOCIAL_KIND_SLUGS: Set<string> = new Set(SOCIAL_KINDS.map(([slug]) => slug));
 const AD_KIND_SLUGS: Set<string> = new Set(AD_KINDS.map(([slug]) => slug));
 
-const GEO = import.meta.glob('$lib/data/geo/*.json', { eager: true, import: 'default' });
-const geoFor = (cc: string) =>
-	(Object.entries(GEO).find(([p]) => p.endsWith(`/${cc}.json`))?.[1] as GeoFile) ?? null;
-
-export const load: PageServerLoad = async () => ({
-	countries,
-	withGeo: Object.keys(GEO).map((p) => p.split('/').pop()!.replace('.json', ''))
-});
+export const load: PageServerLoad = async () => ({ countries });
 
 export const actions: Actions = {
 	default: async ({ request, getClientAddress, url }) => {
@@ -30,7 +23,6 @@ export const actions: Actions = {
 		const bandName = String(f.get('band_name') ?? '').trim();
 		const blurb = String(f.get('blurb') ?? '').trim().slice(0, 600);
 		const cc = String(f.get('country') ?? '').toUpperCase();
-		const regionCode = String(f.get('region') ?? '').trim();
 		const commitment = String(f.get('commitment') ?? 'casual');
 		const kind = String(f.get('kind') ?? 'member');
 		// Sent as a full ISO string, converted client-side from a
@@ -55,15 +47,12 @@ export const actions: Actions = {
 			.filter((s) => SOCIAL_KIND_SLUGS.has(s.kind) && s.url);
 
 		const values = {
-			bandName, blurb, cc, regionCode, commitment, kind,
+			bandName, blurb, cc, commitment, kind,
 			eventAt: eventAtRaw, email, address, instruments, genres, paid
 		};
 
-		const geo = geoFor(cc);
 		if (!bandName) return fail(400, { ...values, error: 'The band needs a name.' });
-		if (!geo) return fail(400, { ...values, error: 'No map for that country yet.' });
-		if (!regionCode) return fail(400, { ...values, error: 'Pick a region.' });
-		if (!Number.isFinite(lat) || !Number.isFinite(lng))
+		if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180)
 			return fail(400, { ...values, error: 'Drop the pin on the map so people know where to come.' });
 		if (!instruments.length)
 			return fail(400, { ...values, error: 'Pick at least one instrument you need.' });
@@ -73,12 +62,6 @@ export const actions: Actions = {
 			return fail(400, { ...values, error: 'Pick what kind of post this is.' });
 		if (kind !== 'member' && (!eventAt || isNaN(eventAt.getTime()) || eventAt.getTime() <= Date.now()))
 			return fail(400, { ...values, error: 'Pick a date and time for it, still ahead of now.' });
-		// A generous pad around the country's own frame, not a strict border
-		// check: Leaflet lets you click just past the edge while panning.
-		const [LO0, LO1, LA0, LA1] = geo.bx;
-		const pad = Math.max(LO1 - LO0, LA1 - LA0) * 0.5;
-		if (lng < LO0 - pad || lng > LO1 + pad || lat < LA0 - pad || lat > LA1 + pad)
-			return fail(400, { ...values, error: 'That pin landed outside the country. Drop it again.' });
 		if (!socials.length)
 			return fail(400, { ...values, error: 'Give at least one place where you want to be contacted, with a real link.' });
 		if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
@@ -95,13 +78,13 @@ export const actions: Actions = {
 			await db.transaction(async (tx) => {
 				const rows = await tx.execute(sql`
 					insert into ad (public_id, band_name, blurb, commitment, kind, event_at, paid,
-					                country_code, region_code,
+					                country_code,
 					                lat, lng, address, display_lat, display_lng,
 					                contact_email, status, verify_token_hash, verify_expires_at,
 					                created_ip_hash)
 					values (${id}, ${bandName}, ${blurb}, ${commitment}, ${kind}::ad_kind,
 					        ${eventAt ? eventAt.toISOString() : null}, ${paid},
-					        ${cc}, ${regionCode},
+					        ${cc},
 					        ${lat}, ${lng}, ${address}, ${shown.lat}, ${shown.lng},
 					        ${email}, 'unverified', ${hashToken(verifyToken)}, now() + interval '24 hours',
 					        ${hashIp(getClientAddress(), env.IP_SALT ?? 'dev')})

@@ -26,15 +26,8 @@ export const linkKind = pgEnum('link_kind', [
 
 export const country = pgTable('country', {
 	code: char('code', { length: 2 }).primaryKey(),
-	nameEn: text('name_en').notNull(),
-	hasGeo: boolean('has_geo').notNull().default(false)
-});
-
-export const region = pgTable('region', {
-	countryCode: char('country_code', { length: 2 }).notNull().references(() => country.code),
-	code: text('code').notNull(),
 	nameEn: text('name_en').notNull()
-}, (t) => [primaryKey({ columns: [t.countryCode, t.code] })]);
+});
 
 export const instrument = pgTable('instrument', {
 	slug: text('slug').primaryKey(),
@@ -68,7 +61,6 @@ export const ad = pgTable('ad', {
 	eventAt: timestamp('event_at', { withTimezone: true }),
 
 	countryCode: char('country_code', { length: 2 }).notNull().references(() => country.code),
-	regionCode: text('region_code'),
 
 	// Exact position of the rehearsal room, plus the optional street
 	// address. Neither is ever sent to a browser.
@@ -128,7 +120,7 @@ export const ad = pgTable('ad', {
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 }, (t) => [
-	index('ad_country_idx').on(t.countryCode, t.regionCode, t.expiresAt),
+	index('ad_country_idx').on(t.countryCode, t.expiresAt),
 	index('ad_expiry_idx').on(t.expiresAt),
 	uniqueIndex('ad_public_id_idx').on(t.publicId),
 	check('band_name_len', sql`length(btrim(${t.bandName})) between 1 and 80`),

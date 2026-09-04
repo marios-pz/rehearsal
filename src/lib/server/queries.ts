@@ -5,7 +5,7 @@ export type AdLink = { kind: string; handle: string };
 
 export type AdRow = {
 	public_id: string; band_name: string; blurb: string;
-	region_code: string; country_code: string;
+	country_code: string;
 	display_lat: number; display_lng: number;
 	commitment: 'casual' | 'serious' | 'professional';
 	kind: 'member' | 'gig' | 'rehearsal';
@@ -24,7 +24,7 @@ export type AdRow = {
  */
 export async function liveAds(countryCode: string): Promise<AdRow[]> {
 	const rows = await db.execute(sql`
-		select a.public_id, a.band_name, a.blurb, a.region_code, a.country_code,
+		select a.public_id, a.band_name, a.blurb, a.country_code,
 		       a.display_lat, a.display_lng, a.commitment, a.kind, a.event_at,
 		       a.paid, a.view_count,
 		       greatest(0, ceil(extract(epoch from a.expires_at - now()) / 86400))::int as days_left,

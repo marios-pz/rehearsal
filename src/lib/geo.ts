@@ -1,18 +1,17 @@
+export type LatLng = { lat: number; lng: number };
+
 /**
- * The shape of a country's geo/*.json file. `regions` still supplies the
- * region name list (the Region combobox) and `bx` is a plain real-world
- * lon/lat bounding box used to frame the map on the whole country — both
- * client-safe, no server/ in the path.
- *
- * `regions[].d`/`.b` (pre-projected SVG paths, for drawing region outlines
- * on a build-time map) and the project()/unproject() pixel<->latlng math
- * that went with them are gone: MapView draws real Leaflet + OpenStreetMap
- * tiles now, which already carry that geographic context, so a second,
- * hand-drawn region outline on top of them was redundant custom logic.
+ * Great-circle distance in kilometres. Client-safe geo math (mirrors
+ * server/geo.ts's server-only geo math): used only to rank ads against the
+ * searching musician's own position, which never leaves the browser — see
+ * $lib/position.svelte.ts.
  */
-export type GeoFile = {
-	w: number; h: number;
-	bx: [number, number, number, number];   // LO0, LO1, LA0, LA1
-	regions: { k: string; d: string; b: [number, number, number, number] }[];
-	pins: { n: string; r: string; x: number; y: number }[];
-};
+export function haversineKm(a: LatLng, b: LatLng): number {
+	const R = 6371;
+	const dLat = (b.lat - a.lat) * Math.PI / 180;
+	const dLng = (b.lng - a.lng) * Math.PI / 180;
+	const s1 = Math.sin(dLat / 2), s2 = Math.sin(dLng / 2);
+	const t = s1 * s1 +
+		Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * s2 * s2;
+	return 2 * R * Math.asin(Math.sqrt(t));
+}

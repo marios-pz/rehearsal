@@ -228,30 +228,16 @@ async function seedReference(sql) {
   const countries = JSON.parse(
     await readFile(join(ROOT, "src/lib/data/countries.json"), "utf8"),
   );
-  const geoDir = join(ROOT, "src/lib/data/geo");
-  const withGeo = new Set(
-    (await readdir(geoDir)).map((f) => f.replace(".json", "")),
-  );
 
   for (const co of countries) {
-    await sql`insert into country (code, name_en, has_geo)
-		          values (${co.c}, ${co.n}, ${withGeo.has(co.c)})
-		          on conflict (code) do update set name_en = excluded.name_en,
-		                                           has_geo = excluded.has_geo`;
+    await sql`insert into country (code, name_en)
+		          values (${co.c}, ${co.n})
+		          on conflict (code) do update set name_en = excluded.name_en`;
   }
 
-  let regions = 0;
-  for (const cc of withGeo) {
-    const geo = JSON.parse(await readFile(join(geoDir, `${cc}.json`), "utf8"));
-    for (const r of geo.regions) {
-      await sql`insert into region (country_code, code, name_en) values (${cc}, ${r.k}, ${r.k})
-			          on conflict (country_code, code) do update set name_en = excluded.name_en`;
-      regions++;
-    }
-  }
   return (
     `${INSTRUMENTS.length} instruments, ${GENRES.length} genres, ` +
-    `${countries.length} countries, ${regions} regions`
+    `${countries.length} countries`
   );
 }
 

@@ -29,11 +29,8 @@ what actually applies migrations and seeds reference data before the server
 is allowed to start.
 
 **Build tooling** &nbsp;Vite 8, `svelte-check` for types (`npm run check`,
-kept at zero errors and warnings). `tools/build-geo.py` is a one-off Python
-script (`shapely`) that turns Natural Earth shapefiles into the per-country
-JSON geometry, run by hand when a country is added, never at request time.
-`@electric-sql/pglite` is installed but currently unused, nothing references
-it yet.
+kept at zero errors and warnings). `@electric-sql/pglite` is installed but
+currently unused, nothing references it yet.
 
 **Deployment** &nbsp;A multi-stage `Dockerfile` (`node:24-alpine`, non-root)
 and a `docker-compose.yml` that adds `postgres:18-alpine`, for a
@@ -42,42 +39,41 @@ self-contained local or production-like stack with one command.
 ## Architecture
 
 Three layers: a SvelteKit webapp, a Postgres database that does most of the
-work through functions and views, and build-time static data (countries,
-per-country geometry) that never touches a network call at request time.
+work through functions and views, and build-time static data (just
+`countries.json` now) that never touches a network call at request time.
 
 ```mermaid
 graph TB
     subgraph Browser
         UI["Combobox / MapView"]
+        Position["position.svelte.ts  geolocation, in-memory only"]
     end
 
     subgraph Webapp["SvelteKit webapp"]
-        Home["/  ranked board for a country"]
-        Results["/results  filtered + ranked"]
+        Home["/  map + list, ranked, one page"]
         Post["/post  create an ad"]
         Renew["/renew  extend or edit"]
         Api["/api/ads  country switch, no reload"]
         Queries["server/queries.ts"]
-        Geo["server/geo.ts  project / unproject / jitter"]
+        Geo["server/geo.ts  jitter"]
         Token["server/token.ts  mint, hash, compare"]
     end
 
     subgraph Data["Static data, build time"]
         Countries["countries.json"]
-        GeoFiles["geo/*.json  pre-projected SVG paths"]
     end
 
     subgraph DB["Postgres"]
         Ad[("ad, ad_role, ad_genre, ad_link")]
-        Ref[("country, region, instrument, genre")]
+        Ref[("country, instrument, genre")]
         Views[["ad_live / ad_needs_reminder"]]
         Funcs{{"ping_ad / close_role / delete_ad / reap_expired_ads"}}
     end
 
-    UI --> Home & Results & Post & Renew & Api
+    UI --> Home & Post & Renew & Api
+    Position --> UI
 
-    Home --> Queries & Countries & GeoFiles
-    Results --> Queries & GeoFiles
+    Home --> Queries & Countries
     Api --> Queries
     Post --> Token & Geo
     Renew --> Funcs
@@ -93,14 +89,16 @@ graph TB
 
 SvelteKit with `adapter-node`, Svelte 5 runes throughout, no stores.
 
-- `src/routes/` &nbsp;`/` (ranked board), `/post` (create), `/renew`
-  (extend or edit by token), `/results` (filtered view reached from `/`),
-  `/api/ads` (JSON, backs the country switch without a full navigation)
+- `src/routes/` &nbsp;`/` (map + list, ranked, filters live beside it —
+  no separate results page), `/post` (create), `/renew` (extend or edit by
+  token), `/api/ads` (JSON, backs the country switch without a full
+  navigation)
 - `src/lib/components/` &nbsp;`Combobox.svelte` (the one picker, used for
-  country, region, instruments, genres), `MapView.svelte` (renders the
-  selected country's geometry, counter-scaled pins)
+  country, instruments, genres, commitment), `MapView.svelte` (Leaflet +
+  OpenStreetMap tiles, fits to pins or to the searching musician's own
+  geolocation, gates below a minimum zoom)
 - `src/lib/server/` &nbsp;`queries.ts` (the only thing that reads `ad`),
-  `geo.ts` (lon/lat &harr; SVG point, jitter), `token.ts` (mint, hash,
+  `geo.ts` (jitter, server-only), `token.ts` (mint, hash,
   constant-time compare), `db/` (Drizzle schema and the lazy connection)
 - `src/lib/fuzzy.ts`, `src/lib/taxonomy.ts` &nbsp;shared scorer and the
   instrument/genre constants, kept out of the routes so form and results
@@ -113,8 +111,8 @@ SQL, not in application code, so they hold no matter what calls them.
 
 - **Tables** &nbsp;`ad` (the whole product), `ad_role`, `ad_genre`,
   `ad_link` (one row per open position, per genre, per contact point),
-  `report`, `rate_bucket` (unused), and the lookup tables `country`,
-  `region`, `instrument`, `genre`
+  `report`, `rate_bucket` (doubles as view-count and generic rate-limit
+  storage), and the lookup tables `country`, `instrument`, `genre`
 - **Views** &nbsp;`ad_live` (expiry as a predicate, not a job),
   `ad_needs_reminder` (selects rows for the day-11 nudge; nothing sends it
   yet)
@@ -160,8 +158,8 @@ half-migrated database serving traffic. It:
    tables in `public`, and says which out loud
 4. applies every migration in `drizzle/` that has not run, each in its own
    transaction
-5. loads reference data (instruments, genres, 194 countries, 58 regions),
-   idempotently, so new entries arrive with the next deploy
+5. loads reference data (instruments, genres, 194 countries), idempotently,
+   so new entries arrive with the next deploy
 
 Never seeds ads. A fresh database starts with an empty board, on purpose:
 an empty board is honest, a board of fake bands is not.
@@ -183,7 +181,7 @@ $ npm start
    extensions ok (pgcrypto, citext, cube, earthdistance, pg_trgm)
    database is empty, creating the schema from scratch
    applied 3 migrations: 0000_supreme_champions.sql, 0001_functions.sql, ...
-   reference data: 10 instruments, 14 genres, 194 countries, 58 regions
+   reference data: 10 instruments, 14 genres, 194 countries
    ready
 ```
 
@@ -228,25 +226,28 @@ server is a shared community resource, not a paid CDN, so it's meant for
 apps at this scale, not heavy production traffic. If that ever changes, the
 tile URL is the only place the decision lives.
 
-`src/lib/data/geo/*.json` still holds pre-projected SVG paths per country
-(admin-1 regions dissolved from Natural Earth, simplified with
-Ramer-Douglas-Peucker to about one output pixel, 13-38 KB each) — that part
-stayed build-time, unchanged. What changed is what happens with them:
-`pathToLatLngRings()` (`src/lib/geo.ts`) unprojects a region's path back into
-lat/lng at request time, so Leaflet can draw the selected region's outline
-on top of real tiles. The pixel frame each file carries (`bx`, `w`, `h`) is
-what makes that inversion possible without re-deriving a projection.
+There used to be a per-country admin-1 region picker backed by hand-built
+GeoJSON (`tools/build-geo.py`, one file per country). It only ever covered 4
+countries and needed a Python run for every new one, so it's gone — country
+is the only geography a musician picks by hand now. `MapView.svelte` frames
+itself on whatever pins it's given (`fitBounds`), or on the searching
+musician's own `navigator.geolocation` position when there are none yet, or
+on a generic world view when neither is available — no per-country data file
+of any kind. Below a minimum zoom the pin layer hides and both the map and
+the list prompt to zoom in, the same idea as Airbnb's "search this area."
 
-Posting an ad no longer sends a pixel-space click to the server to unproject;
-Leaflet's own click event already carries real lat/lng, so the browser sends
-that directly and the server only jitters and stores it.
+Posting an ad sends Leaflet's own click event straight through — real
+lat/lng, no pixel-space projection involved — and the server only jitters
+and stores it.
 
 ## Ranking, not filtering
 
 `liveAds()` returns everything live in a country and the client ranks it:
-instrument match 46, each genre overlap 20, right region 24. Nothing is
-hidden. Hard filters produce empty pages, and an empty page on a first visit
-is what kills a board before its network exists.
+instrument match 46, each genre overlap 20, distance from the searching
+musician's own geolocation (a smooth falloff, halving every 50km, peaking
+at 24 — never a hard cutoff, and it drops out entirely if geolocation is
+denied). Nothing is hidden. Hard filters produce empty pages, and an empty
+page on a first visit is what kills a board before its network exists.
 
 ## Layout
 
@@ -254,12 +255,13 @@ is what kills a board before its network exists.
 scripts/bootstrap.js        the gate described above
 drizzle/                    migrations, applied in filename order
 src/lib/server/db/schema.ts Drizzle schema, the source of truth
-src/lib/geo.ts              GeoFile type, region name list, country bounds
-src/lib/server/geo.ts       jitter (server-only, everything else is client-safe)
+src/lib/geo.ts              haversineKm, client-safe geo math
+src/lib/server/geo.ts       jitter (server-only)
+src/lib/position.svelte.ts  shared one-shot geolocation request
 src/lib/server/token.ts     mint, hash, constant-time compare
 src/lib/components/         Combobox, MapView (Leaflet + OpenStreetMap)
-src/routes/                 / (find), /post, /renew, /api/ads
-src/lib/data/               countries, per-country geometry
+src/routes/                 / (map + list), /post, /renew, /api/ads
+src/lib/data/               countries.json
 ```
 
 ## Not built yet

@@ -1,0 +1,14 @@
+import { chromium } from 'playwright-core';
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, headless: true });
+const page = await browser.newPage({ viewport: { width: 1220, height: 838 } });
+await page.goto('http://localhost:3998/?c=GR', { waitUntil: 'networkidle' });
+await page.getByPlaceholder('drums, bass, vocals').click();
+await page.keyboard.type('drums');
+await page.waitForTimeout(200);
+await page.getByText('Drums', { exact: true }).first().click();
+await page.waitForTimeout(200);
+await page.getByPlaceholder('drums, bass, vocals').click();
+await page.keyboard.type('bass');
+await page.waitForTimeout(300);
+await page.screenshot({ path: '/tmp/claude-1000/-home-user-Vault-github-rehearsal/6e64f484-b01b-4c65-8187-c1ddd54fdf58/scratchpad/css-repro.png' });
+await browser.close();
