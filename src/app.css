@@ -178,8 +178,12 @@ button.go[disabled] { opacity: .3; cursor: not-allowed; }
 .gigcard .row { grid-column: 1 / -1; grid-row: 3; }
 .right { position: sticky; top: 12px; }
 /* Sticky only makes sense beside a taller column; stacked on mobile it
-   would float the map over whatever scrolls past underneath. */
-@media (max-width: 820px) { .right { position: static; } }
+   would float the map over whatever scrolls past underneath. `order: -1`
+   puts the map above the list specifically on mobile: the list is the
+   thing that resizes as it re-renders (view toggle, viewport filtering),
+   and if it sat above the map, that resize would shift the map's on-page
+   position out from under an in-progress touch-drag, reading as jitter. */
+@media (max-width: 820px) { .right { position: static; order: -1; } }
 .note { font-size: 12.5px; color: var(--dim); margin: 8px 0 0; }
 .social { display: inline-flex; align-items: center; gap: 7px; margin-top: 11px; font-size: 12.5px;
           border: 1px solid var(--ink); padding: 8px 12px; color: var(--ink); text-decoration: none; }

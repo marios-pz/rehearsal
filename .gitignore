@@ -37,3 +37,8 @@ npm-debug.log*
 # to subset from. The site ships static/fonts/maple-mono-web/ instead; see
 # app.css.
 /fonts/
+### Capacitor ###
+# Native project + the webDir Capacitor copies the build into; both regenerate
+# from `npx cap add android` / `npx cap sync`.
+android/
+capacitor-www/

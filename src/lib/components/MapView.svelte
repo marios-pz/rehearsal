@@ -97,7 +97,6 @@
 			map = L.map(el, { zoomControl: false, attributionControl: true });
 			L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 				attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-				className: 'lf-dark-tiles',
 				maxZoom: 19
 			}).addTo(map);
 
@@ -212,8 +211,14 @@
 </div>
 
 <style>
+	/* transform: translateZ(0) promotes this onto its own compositing layer,
+	   so the clip-path mask is computed once against a static layer rather
+	   than re-tested every frame against the moving tiles underneath —
+	   without it, panning inside a clip-path container is a common source
+	   of mobile/WebView jank. */
 	.wrap { position: relative; border: 1px solid var(--line); background: var(--sea); overflow: hidden;
-	        clip-path: polygon(0 10px, 10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%); }
+	        clip-path: polygon(0 10px, 10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+	        transform: translateZ(0); }
 	.map { width: 100%; height: 400px; background: var(--sea); }
 	.map.pick { height: 300px; cursor: crosshair; }
 	@media (max-width: 820px) { .map { height: 280px; } }
@@ -236,8 +241,15 @@
 	   template, so they can't be component-scoped; :global it is. */
 	:global(.leaflet-container) { background: var(--sea); font-family: var(--mono); }
 	/* OSM's own tiles are keyless but render light-only; invert+rotate
-	   turns them dark without needing a dark-specific tile source. */
-	:global(.lf-dark-tiles) { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9); }
+	   turns them dark without needing a dark-specific tile source. Filtering
+	   the whole tile pane once (rather than each tile img individually, via
+	   the tileLayer className option this used to be) is the difference
+	   between one filtered GPU layer and a dozen+ redrawn on every frame of
+	   a pan — the latter is a well-known source of mobile drag jitter. */
+	:global(.leaflet-tile-pane) {
+		filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9);
+		will-change: transform;
+	}
 	:global(.leaflet-control-attribution) {
 		background: #08080a99; color: var(--dim); font-size: 9.5px;
 	}
