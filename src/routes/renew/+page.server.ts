@@ -1,6 +1,11 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { pingAd, renewViaNudge } from '$lib/server/queries';
+import { text } from '$lib/server/form';
+
+/** Both actions answer with the same thing on success: the date the ad is
+ *  now alive until, as a plain YYYY-MM-DD. */
+const day = (d: Date) => d.toISOString().slice(0, 10);
 
 export const load: PageServerLoad = async ({ url }) => ({
 	nudgeId: url.searchParams.get('id') ?? '',
@@ -12,8 +17,8 @@ export const actions: Actions = {
 	// with named ones in the same file, and `nudge` below needs its own name.
 	ping: async ({ request }) => {
 		const f = await request.formData();
-		const id = String(f.get('public_id') ?? '').trim();
-		const token = String(f.get('token') ?? '').trim();
+		const id = text(f, 'public_id');
+		const token = text(f, 'token');
 		if (!id || !token) return fail(400, { id, error: 'Both the ad code and the token are needed.' });
 
 		const until = await pingAd(id, token);
@@ -26,7 +31,7 @@ export const actions: Actions = {
 				       'A lost token cannot be reset.'
 			});
 		}
-		return { renewed: true, until: until.toISOString().slice(0, 10) };
+		return { renewed: true, until: day(until) };
 	},
 
 	// The day-11 reminder email's one-click link: its own single-use
@@ -34,12 +39,12 @@ export const actions: Actions = {
 	// this never touches pingAd/the token the person actually saved.
 	nudge: async ({ request }) => {
 		const f = await request.formData();
-		const id = String(f.get('id') ?? '').trim();
-		const nudge = String(f.get('nudge') ?? '').trim();
+		const id = text(f, 'id');
+		const nudge = text(f, 'nudge');
 		if (!id || !nudge) return fail(400, { error: 'This link is missing its code or token.' });
 
 		const until = await renewViaNudge(id, nudge);
 		if (!until) return fail(400, { error: 'This link is invalid or has expired.' });
-		return { renewed: true, until: until.toISOString().slice(0, 10) };
+		return { renewed: true, until: day(until) };
 	}
 };

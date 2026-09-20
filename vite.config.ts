@@ -9,11 +9,11 @@ import { defineConfig } from 'vite';
 // The allowed dev hostname comes from ORIGIN in .env (loaded by
 // `--env-file-if-exists=.env` in package.json's scripts, so it's already
 // in process.env by the time this file runs) rather than being hardcoded
-// here too — one value, not three copies to keep in sync. Without the
+// here too: one value, not three copies to keep in sync. Without the
 // host in allowedHosts, Vite's DNS-rebinding protection 403s any request
 // whose Host header it doesn't recognize. `.test`, not `.app`: `.app` is
 // HSTS preloaded into every major browser at the TLD level, so it refuses
-// plain HTTP permanently, with no setting to turn that off — cost real
+// plain HTTP permanently, with no setting to turn that off, which cost real
 // time to track down once. `.test` is IANA-reserved for exactly this and
 // carries no such baggage.
 const devHost = (() => {

@@ -3,17 +3,17 @@
 	import { onMount, untrack } from 'svelte';
 	import { position } from '$lib/position.svelte';
 	import type * as Leaflet from 'leaflet';
+	import type { Bounds, LatLng } from '$lib/types';
 
-	type Pin = { id: string; lat: number; lng: number; label: string; paid?: boolean };
-	type Bounds = { south: number; west: number; north: number; east: number };
+	type Pin = LatLng & { id: string; label: string; paid?: boolean };
 	let {
 		pins = [], selected = $bindable(null), hot = null, pickable = false, onpick,
 		minZoom = 0, onzoomgate, onbounds, meCoords = null, locateTick = 0
 	}: {
 		pins?: Pin[];
 		selected?: string | null; hot?: string | null;
-		pickable?: boolean; onpick?: (p: { lat: number; lng: number }) => void;
-		// Below this zoom level, pins hide and onzoomgate(true) fires — the
+		pickable?: boolean; onpick?: (p: LatLng) => void;
+		// Below this zoom level, pins hide and onzoomgate(true) fires. The
 		// caller (the results list) mirrors that state so "no results" means
 		// the same thing on the map and in the list, not just one of them.
 		// 0 disables the gate entirely (the /post pin-drop map never sets it).
@@ -21,15 +21,15 @@
 		// Fires with the current viewport on every pan/zoom (and once after
 		// any programmatic frame()), so the caller can filter its list to
 		// "what's visible right now" the way Airbnb's results follow the
-		// map — this component only reports the viewport, it never filters
+		// map. This component only reports the viewport, it never filters
 		// `pins` itself (Leaflet already only draws what's on-screen).
 		onbounds?: (b: Bounds) => void;
 		// The "Find Me" button's target: incrementing locateTick (a click)
 		// drops a marker at meCoords and flies there. meCoords alone never
-		// triggers this — geolocation already resolves silently on mount to
+		// triggers this: geolocation already resolves silently on mount to
 		// feed the ranking distance term, and that must never itself yank
 		// the map away from what the musician is actually looking at.
-		meCoords?: { lat: number; lng: number } | null; locateTick?: number;
+		meCoords?: LatLng | null; locateTick?: number;
 	} = $props();
 
 	// Leaflet's Map instance is a stateful class the library mutates
@@ -53,7 +53,7 @@
 	// carry enough geographic context that a drawn region outline on top
 	// of them would be redundant); otherwise centers on the searching
 	// musician's own position if they've granted it, or a generic world
-	// view if not — no per-country data involved either way.
+	// view if not, with no per-country data involved either way.
 	function frame() {
 		if (pins.length) {
 			map.fitBounds(pins.map((p) => [p.lat, p.lng] as [number, number]), { padding: [40, 40], maxZoom: 12 });
@@ -67,10 +67,10 @@
 	// than a misleading "zoom in" prompt, hence the `pins.length` guard.
 	// Reads and writes `zoomGated`, so calling this from inside the pin
 	// $effect below (a tracked context) would register `zoomGated` as one
-	// of that effect's own dependencies — the effect then re-runs whenever
+	// of that effect's own dependencies, and the effect then re-runs whenever
 	// the gate flips, re-fitting bounds via frame() and undoing the very
 	// zoom-out that triggered the gate. untrack() at the call site (not
-	// here — the read/write themselves are the point) keeps that reaction
+	// here, the read/write themselves are the point) keeps that reaction
 	// out of the effect's dependency list; the native 'zoomend' listener
 	// calls this outside any tracked context, so it needs no such wrapping.
 	function applyGate() {
@@ -109,7 +109,7 @@
 
 			map.on('click', (e: Leaflet.LeafletMouseEvent) => {
 				if (pickable) {
-					renderDrop(e.latlng);
+					dropDot(dropLayer, e.latlng, 'lf-drop');
 					onpick?.({ lat: e.latlng.lat, lng: e.latlng.lng });
 				} else {
 					// A click that landed on a pin never reaches here: its own
@@ -124,6 +124,21 @@
 		})();
 		return () => { disposed = true; map?.remove(); };
 	});
+
+	// The pin-drop crosshair on /post and the "you are here" dot are the
+	// same three concentric circles; only the colour differs, so they share
+	// one icon and one block of CSS, keyed by class.
+	function dropDot(layer: Leaflet.LayerGroup, at: LatLng | Leaflet.LatLng, cls: 'lf-drop' | 'lf-me') {
+		layer.clearLayers();
+		L.marker(at, {
+			icon: L.divIcon({
+				className: 'lf-dot-wrap',
+				html: `<div class="lf-dot ${cls}"><span class="halo"></span><span class="ring"></span><span class="core"></span></div>`,
+				iconSize: [52, 52],
+				iconAnchor: [26, 26]
+			})
+		}).addTo(layer);
+	}
 
 	function pinIcon(p: Pin, isOn: boolean, isHot: boolean) {
 		const w = Math.max(34, p.label.length * 5.8 + 11);
@@ -164,34 +179,11 @@
 		if (locateTick === 0 || !map) return;
 		const p = untrack(() => meCoords);
 		if (!p) return;
-		meLayer.clearLayers();
-		L.marker([p.lat, p.lng], {
-			icon: L.divIcon({
-				className: 'lf-me-wrap',
-				html: '<div class="lf-me"><span class="halo"></span><span class="ring"></span><span class="core"></span></div>',
-				iconSize: [52, 52], iconAnchor: [26, 26]
-			})
-		}).addTo(meLayer);
+		dropDot(meLayer, p, 'lf-me');
 		map.setView([p.lat, p.lng], LOCAL_ZOOM);
 	});
 
-	function renderDrop(latlng: Leaflet.LatLng) {
-		dropLayer.clearLayers();
-		L.marker(latlng, {
-			icon: L.divIcon({
-				className: 'lf-drop-wrap',
-				html: '<div class="lf-drop"><span class="halo"></span><span class="ring"></span><span class="core"></span></div>',
-				iconSize: [52, 52], iconAnchor: [26, 26]
-			})
-		}).addTo(dropLayer);
-	}
-
-	function zoom(delta: number) {
-		map?.setZoom(map.getZoom() + delta);
-	}
-	function resetView() {
-		frame();
-	}
+	const zoom = (delta: number) => map?.setZoom(map.getZoom() + delta);
 </script>
 
 <div class="wrap">
@@ -201,7 +193,7 @@
 	<div class="zoom">
 		<button type="button" onclick={() => zoom(1)} aria-label="Zoom in">+</button>
 		<button type="button" onclick={() => zoom(-1)} aria-label="Zoom out">&minus;</button>
-		<button type="button" class="rs" aria-label="Fit all pins" onclick={resetView}>ALL</button>
+		<button type="button" class="rs" aria-label="Fit all pins" onclick={frame}>ALL</button>
 	</div>
 	{#if pickable}
 		<div class="coords">click the map to place it</div>
@@ -213,7 +205,7 @@
 <style>
 	/* transform: translateZ(0) promotes this onto its own compositing layer,
 	   so the clip-path mask is computed once against a static layer rather
-	   than re-tested every frame against the moving tiles underneath —
+	   than re-tested every frame against the moving tiles underneath.
 	   without it, panning inside a clip-path container is a common source
 	   of mobile/WebView jank. */
 	.wrap { position: relative; border: 1px solid var(--line); background: var(--sea); overflow: hidden;
@@ -245,7 +237,7 @@
 	   the whole tile pane once (rather than each tile img individually, via
 	   the tileLayer className option this used to be) is the difference
 	   between one filtered GPU layer and a dozen+ redrawn on every frame of
-	   a pan — the latter is a well-known source of mobile drag jitter. */
+	   a pan, and the latter is a well-known source of mobile drag jitter. */
 	:global(.leaflet-tile-pane) {
 		filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9);
 		will-change: transform;
@@ -255,7 +247,7 @@
 	}
 	:global(.leaflet-control-attribution a) { color: var(--dim); }
 
-	:global(.lf-pin-wrap), :global(.lf-drop-wrap), :global(.lf-me-wrap) { pointer-events: none; }
+	:global(.lf-pin-wrap), :global(.lf-dot-wrap) { pointer-events: none; }
 	:global(.lf-pin) {
 		position: relative; height: 15px; cursor: pointer; pointer-events: auto;
 		background: #0b0b0fee; border: 1px solid var(--ink); display: flex; align-items: center; justify-content: center;
@@ -276,33 +268,22 @@
 	:global(.lf-pin.on .lf-pin-stem), :global(.lf-pin.on .lf-pin-dot) { background: var(--marker); }
 	:global(.lf-pin.paid) { border-color: var(--stamp); }
 
-	:global(.lf-drop) { position: relative; width: 100%; height: 100%; }
-	:global(.lf-drop .ring) {
+	/* One dot, two colours: the pin-drop crosshair on /post (marker yellow)
+	   and "you are here" from the Find Me button (stamp red, matching its
+	   own button). --dot is the only thing that differs between them. */
+	:global(.lf-dot) { position: relative; width: 100%; height: 100%; }
+	:global(.lf-drop) { --dot: var(--marker); }
+	:global(.lf-me) { --dot: var(--stamp); }
+	:global(.lf-dot .ring) {
 		position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px;
-		border-radius: 50%; border: 1.4px solid var(--marker);
+		border-radius: 50%; border: 1.4px solid var(--dot);
 	}
-	:global(.lf-drop .core) {
+	:global(.lf-dot .core) {
 		position: absolute; left: 50%; top: 50%; width: 4.8px; height: 4.8px; margin: -2.4px 0 0 -2.4px;
-		border-radius: 50%; background: var(--marker);
+		border-radius: 50%; background: var(--dot);
 	}
-	:global(.lf-drop .halo) {
+	:global(.lf-dot .halo) {
 		position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px;
-		border-radius: 50%; background: var(--marker); opacity: .13;
-	}
-
-	/* "You are here", dropped by the Find Me button — red like its button,
-	   distinct from the marker-yellow pin-drop crosshair used on /post. */
-	:global(.lf-me) { position: relative; width: 100%; height: 100%; }
-	:global(.lf-me .ring) {
-		position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px;
-		border-radius: 50%; border: 1.4px solid var(--stamp);
-	}
-	:global(.lf-me .core) {
-		position: absolute; left: 50%; top: 50%; width: 4.8px; height: 4.8px; margin: -2.4px 0 0 -2.4px;
-		border-radius: 50%; background: var(--stamp);
-	}
-	:global(.lf-me .halo) {
-		position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px;
-		border-radius: 50%; background: var(--stamp); opacity: .13;
+		border-radius: 50%; background: var(--dot); opacity: .13;
 	}
 </style>

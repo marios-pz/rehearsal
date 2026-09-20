@@ -104,7 +104,7 @@ export const ad = pgTable('ad', {
 	verifyExpiresAt: timestamp('verify_expires_at', { withTimezone: true }),
 
 	// Another separate, short-lived, one-time token: the day-11 "renew
-	// now" email link. Deliberately not the edit token — that one is
+	// now" email link. Deliberately not the edit token, because that one is
 	// never persisted in plaintext anywhere, ever, including in a link
 	// minted days after the fact, so this gets its own narrow-purpose
 	// token instead of trying to smuggle the real one forward in time.

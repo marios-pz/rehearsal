@@ -7,13 +7,13 @@ import { Capacitor } from '@capacitor/core';
  *
  * Coordinates live only in memory: never sent to the server, never put in
  * a URL. If the musician denies or the platform has no geolocation, every
- * reader just sees `coords: null` and degrades gracefully — nothing here
+ * reader just sees `coords: null` and degrades gracefully. Nothing here
  * is required for the board to work.
  *
  * Inside the Capacitor shell this goes through @capacitor/geolocation
  * instead of the plain web API: a WebView doesn't reliably surface the
  * native OS permission prompt for `navigator.geolocation` on its own, so
- * the plugin bridges that properly. Browser visitors are unaffected —
+ * the plugin bridges that properly. Browser visitors are unaffected:
  * `Capacitor.isNativePlatform()` is false there and this falls straight
  * through to the same web API as before.
  */

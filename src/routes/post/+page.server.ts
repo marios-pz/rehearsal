@@ -2,6 +2,7 @@ import { fail } from '@sveltejs/kit';
 import { sql } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
+import { text, picks, slugsOf } from '$lib/server/form';
 import { mintToken, hashToken, publicId, hashIp } from '$lib/server/token';
 import { jitter } from '$lib/server/geo';
 import { sendVerificationEmail } from '$lib/server/email';
@@ -9,63 +10,69 @@ import { INSTRUMENTS, GENRES, COMMITMENTS, SOCIAL_KINDS, AD_KINDS } from '$lib/t
 import { env } from '$env/dynamic/private';
 import countries from '$lib/data/countries.json';
 
-const INSTRUMENT_SLUGS: Set<string> = new Set(INSTRUMENTS.map(([slug]) => slug));
-const GENRE_SLUGS: Set<string> = new Set(GENRES.map(([slug]) => slug));
-const COMMITMENT_SLUGS: Set<string> = new Set(COMMITMENTS.map(([slug]) => slug));
-const SOCIAL_KIND_SLUGS: Set<string> = new Set(SOCIAL_KINDS.map(([slug]) => slug));
-const AD_KIND_SLUGS: Set<string> = new Set(AD_KINDS.map(([slug]) => slug));
+/** Anything a client sends that is not in these is dropped or rejected. */
+const VALID = {
+	instrument: slugsOf(INSTRUMENTS), genre: slugsOf(GENRES), commitment: slugsOf(COMMITMENTS),
+	social: slugsOf(SOCIAL_KINDS), kind: slugsOf(AD_KINDS)
+};
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export const load: PageServerLoad = async () => ({ countries });
 
 export const actions: Actions = {
 	default: async ({ request, getClientAddress, url }) => {
 		const f = await request.formData();
-		const bandName = String(f.get('band_name') ?? '').trim();
-		const blurb = String(f.get('blurb') ?? '').trim().slice(0, 600);
-		const cc = String(f.get('country') ?? '').toUpperCase();
-		const commitment = String(f.get('commitment') ?? 'casual');
-		const kind = String(f.get('kind') ?? 'member');
+
+		const bandName = text(f, 'band_name');
+		const blurb = text(f, 'blurb').slice(0, 600);
+		const countryCode = text(f, 'country').toUpperCase();
+		const commitment = text(f, 'commitment') || 'casual';
+		const kind = text(f, 'kind') || 'member';
+		const email = text(f, 'email');
+		const address = text(f, 'address') || null;
+		const paid = f.get('paid') === 'on';
+		const instruments = picks(f, 'instrument', VALID.instrument);
+		const genres = picks(f, 'genre', VALID.genre);
+		const lat = Number(f.get('pin_lat'));
+		const lng = Number(f.get('pin_lng'));
+
 		// Sent as a full ISO string, converted client-side from a
 		// datetime-local input using the browser's own timezone: parsing a
 		// bare "2026-09-10T19:00" here, on the server, would use the
 		// server's timezone instead of the poster's.
-		const eventAtRaw = String(f.get('event_at') ?? '').trim();
-		const eventAt = kind !== 'member' && eventAtRaw ? new Date(eventAtRaw) : null;
-		const email = String(f.get('email') ?? '').trim();
-		const address = String(f.get('address') ?? '').trim() || null;
-		const lat = Number(f.get('pin_lat')), lng = Number(f.get('pin_lng'));
-		const instruments = f.getAll('instrument').map(String).filter((i) => INSTRUMENT_SLUGS.has(i));
-		const genres = f.getAll('genre').map(String).filter((g) => GENRE_SLUGS.has(g));
-		const paid = f.get('paid') === 'on';
+		const eventAtRaw = text(f, 'event_at');
+		const dated = kind !== 'member';
+		const eventAt = dated && eventAtRaw ? new Date(eventAtRaw) : null;
 
 		// Kept as parallel arrays, index-aligned by the template's own
 		// each-block order, then zipped and cleaned here in one place.
-		const socialKinds = f.getAll('social_kind').map(String);
-		const socialUrls = f.getAll('social_url').map(String);
-		const socials = socialKinds
-			.map((kind, i) => ({ kind, url: socialUrls[i]?.trim() ?? '' }))
-			.filter((s) => SOCIAL_KIND_SLUGS.has(s.kind) && s.url);
+		const handles = f.getAll('social_url').map(String);
+		const socials = f
+			.getAll('social_kind')
+			.map((k, i) => ({ kind: String(k), handle: handles[i]?.trim() ?? '' }))
+			.filter((s) => VALID.social.has(s.kind) && s.handle);
 
+		// Echoed back with any failure so the form redraws filled in.
 		const values = {
-			bandName, blurb, cc, commitment, kind,
+			bandName, blurb, cc: countryCode, commitment, kind,
 			eventAt: eventAtRaw, email, address, instruments, genres, paid
 		};
+		const reject = (message: string) => fail(400, { ...values, error: message });
 
-		if (!bandName) return fail(400, { ...values, error: 'The band needs a name.' });
-		if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180)
-			return fail(400, { ...values, error: 'Drop the pin on the map so people know where to come.' });
-		if (!instruments.length)
-			return fail(400, { ...values, error: 'Pick at least one instrument you need.' });
-		if (!COMMITMENT_SLUGS.has(commitment))
-			return fail(400, { ...values, error: 'Pick how serious this is.' });
-		if (!AD_KIND_SLUGS.has(kind))
-			return fail(400, { ...values, error: 'Pick what kind of post this is.' });
-		if (kind !== 'member' && (!eventAt || isNaN(eventAt.getTime()) || eventAt.getTime() <= Date.now()))
-			return fail(400, { ...values, error: 'Pick a date and time for it, still ahead of now.' });
+		const inRange = (n: number, limit: number) => Number.isFinite(n) && Math.abs(n) <= limit;
+
+		if (!bandName) return reject('The band needs a name.');
+		if (!inRange(lat, 90) || !inRange(lng, 180))
+			return reject('Drop the pin on the map so people know where to come.');
+		if (!instruments.length) return reject('Pick at least one instrument you need.');
+		if (!VALID.commitment.has(commitment)) return reject('Pick how serious this is.');
+		if (!VALID.kind.has(kind)) return reject('Pick what kind of post this is.');
+		if (dated && !(eventAt && eventAt.getTime() > Date.now()))
+			return reject('Pick a date and time for it, still ahead of now.');
 		if (!socials.length)
-			return fail(400, { ...values, error: 'Give at least one place where you want to be contacted, with a real link.' });
-		if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
-			return fail(400, { ...values, error: 'The email is only used for the renewal link. It is never shown.' });
+			return reject('Give at least one place where you want to be contacted, with a real link.');
+		if (!EMAIL.test(email))
+			return reject('The email is only used for the renewal link. It is never shown.');
 
 		const shown = jitter(lat, lng, 700);
 		// Not the edit token: that one is minted only once verify_ad()
@@ -76,32 +83,28 @@ export const actions: Actions = {
 
 		try {
 			await db.transaction(async (tx) => {
-				const rows = await tx.execute(sql`
+				const [{ id: adId }] = (await tx.execute(sql`
 					insert into ad (public_id, band_name, blurb, commitment, kind, event_at, paid,
-					                country_code,
-					                lat, lng, address, display_lat, display_lng,
+					                country_code, lat, lng, address, display_lat, display_lng,
 					                contact_email, status, verify_token_hash, verify_expires_at,
 					                created_ip_hash)
 					values (${id}, ${bandName}, ${blurb}, ${commitment}, ${kind}::ad_kind,
-					        ${eventAt ? eventAt.toISOString() : null}, ${paid},
-					        ${cc},
-					        ${lat}, ${lng}, ${address}, ${shown.lat}, ${shown.lng},
+					        ${eventAt?.toISOString() ?? null}, ${paid},
+					        ${countryCode}, ${lat}, ${lng}, ${address}, ${shown.lat}, ${shown.lng},
 					        ${email}, 'unverified', ${hashToken(verifyToken)}, now() + interval '24 hours',
 					        ${hashIp(getClientAddress(), env.IP_SALT ?? 'dev')})
 					returning id
-				`);
-				const adId = (rows as unknown as { id: string }[])[0].id;
-				for (const { kind, url } of socials) {
+				`)) as unknown as { id: string }[];
+
+				for (const s of socials)
 					await tx.execute(sql`
-						insert into ad_link (ad_id, kind, handle) values (${adId}, ${kind}::link_kind, ${url})
+						insert into ad_link (ad_id, kind, handle)
+						values (${adId}, ${s.kind}::link_kind, ${s.handle})
 					`);
-				}
-				for (const slug of instruments) {
+				for (const slug of instruments)
 					await tx.execute(sql`insert into ad_role (ad_id, instrument) values (${adId}, ${slug})`);
-				}
-				for (const slug of genres) {
+				for (const slug of genres)
 					await tx.execute(sql`insert into ad_genre (ad_id, genre) values (${adId}, ${slug})`);
-				}
 			});
 		} catch (err) {
 			console.error('ad insert failed', err);
@@ -117,8 +120,7 @@ export const actions: Actions = {
 			// same-origin form check (see docker-compose.yml) and the one
 			// send-reminders.js already uses for its renewal links.
 			const origin = env.ORIGIN ?? url.origin;
-			const verifyUrl = `${origin}/verify?id=${id}&token=${verifyToken}`;
-			await sendVerificationEmail(email, bandName, verifyUrl);
+			await sendVerificationEmail(email, bandName, `${origin}/verify?id=${id}&token=${verifyToken}`);
 		} catch (err) {
 			console.error('verification email failed', err);
 			return fail(500, {

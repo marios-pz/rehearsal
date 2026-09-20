@@ -1,5 +1,5 @@
 /* Subset from the Maple Mono NF CN family to Latin + Greek + a few symbols
-   (arrows, punctuation) — the glyphs this UI and its ad content actually
+   (arrows, punctuation): the glyphs this UI and its ad content actually
    use. Anything outside that set (an emoji, a CJK band name) falls through
    to the rest of the --mono stack, which is the point of listing one. */
 @font-face {
@@ -37,7 +37,7 @@ body {
 .shell { max-width: 1100px; margin: 0 auto; padding: 18px 16px 60px; }
 
 /* A shared torn-corner notch for panels that were reading as too clean a
-   rectangle — small enough it never eats into real hit-target area. */
+   rectangle, small enough it never eats into real hit-target area. */
 .torn { clip-path: polygon(0 7px, 7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%); }
 
 .kicker { font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--dim); margin: 0; }
@@ -62,7 +62,7 @@ h1.pop:hover { color: #08080a; text-shadow: none; }
 
 .top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 20px; }
 /* The always-visible filter row: country plus every ranking refinement,
-   side by side rather than a gated wizard — each Combobox already handles
+   side by side rather than a gated wizard. Each Combobox already handles
    its own width, this just keeps them from stacking on a wide viewport. */
 .filterbar { display: flex; flex-wrap: wrap; gap: 16px; }
 .filtercol { flex: 1 1 200px; min-width: 180px; }
@@ -97,7 +97,7 @@ h1.pop:hover { color: #08080a; text-shadow: none; }
    No `filter` here on purpose: animating it to/from `none` leaves the
    computed value as `blur(0px)` even after the animation ends (fill:
    forwards holds the interpolated equivalent, not the literal keyword),
-   and any non-`none` filter creates a new stacking context — which then
+   and any non-`none` filter creates a new stacking context, which then
    traps a descendant dropdown's z-index inside this step, so it can no
    longer paint above the *next* step's content once that step has its
    own content underneath it. Cost a real bug once already; don't re-add. */

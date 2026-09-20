@@ -16,7 +16,7 @@ function client(): Resend {
 
 // Resend's own keyless sandbox sender. Delivers, but only Resend account
 // owners can be recipients until a real domain is verified and MAIL_FROM
-// is pointed at it — fine for getting this running, not for real traffic.
+// is pointed at it. Fine for getting this running, not for real traffic.
 const FROM = env.MAIL_FROM ?? 'Rehearsal <onboarding@resend.dev>';
 
 async function send(to: string, subject: string, text: string) {

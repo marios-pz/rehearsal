@@ -1,5 +1,5 @@
 -- =====================================================================
---  find-a-band — Postgres schema
+--  find-a-band, Postgres schema
 --
 --  No users, no auth. An ad is owned by whoever holds its edit token.
 --  Contact happens off-platform via the links on the ad.
@@ -123,7 +123,7 @@ create index ad_expiry_idx  on ad (expires_at) where status = 'published';
 
 
 -- Open positions. One ad routinely needs a drummer AND a bassist, and
--- fills them at different times — so this is a table, not a column.
+-- fills them at different times, so this is a table, not a column.
 create table ad_role (
   ad_id      uuid not null references ad(id) on delete cascade,
   instrument text not null references instrument(slug),
@@ -140,7 +140,7 @@ create table ad_genre (
 create index ad_genre_genre_idx on ad_genre (genre);
 
 
--- Public contact links — the actual point of the product. The musician
+-- Public contact links, the actual point of the product. The musician
 -- finds the ad here and messages the band wherever the band already is.
 create type link_kind as enum
   ('instagram','facebook','youtube','tiktok','spotify','bandcamp','soundcloud','website','email');
@@ -155,7 +155,7 @@ create table ad_link (
 
 -- ---------------------------------------------------------------------
 -- Applications. Optional per ad: some bands only want DMs.
--- Answers are fixed-choice by design — no CVs, no free-text essays.
+-- Answers are fixed-choice by design: no CVs, no free-text essays.
 -- ---------------------------------------------------------------------
 
 create table application (
@@ -198,7 +198,7 @@ create index report_ad_idx on report (ad_id);
 
 
 -- ---------------------------------------------------------------------
--- Live view. Expiry is a predicate, not a cron job — an ad past its date
+-- Live view. Expiry is a predicate, not a cron job: an ad past its date
 -- simply stops matching. A job is only needed to send renewal reminders.
 -- ---------------------------------------------------------------------
 
@@ -305,7 +305,7 @@ on conflict do nothing;
 
 -- ---------------------------------------------------------------------
 -- Reaping. The view already hides expired ads, so nothing user-facing
--- depends on this running on time — it only reclaims rows. Every child
+-- depends on this running on time: it only reclaims rows. Every child
 -- table is ON DELETE CASCADE, so one statement clears the lot.
 --
 -- Run from a SvelteKit interval, or `select cron.schedule(...)` if you

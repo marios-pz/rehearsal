@@ -5,6 +5,7 @@ import { db } from '$lib/server/db';
 import { verifyAd } from '$lib/server/queries';
 import { mintToken, hashToken } from '$lib/server/token';
 import { sendTokenEmail } from '$lib/server/email';
+import { text } from '$lib/server/form';
 
 export const load: PageServerLoad = async ({ url }) => ({
 	id: url.searchParams.get('id') ?? '',
@@ -19,8 +20,8 @@ export const actions: Actions = {
 	// email ever clicks it themselves.
 	default: async ({ request }) => {
 		const f = await request.formData();
-		const id = String(f.get('id') ?? '').trim();
-		const token = String(f.get('token') ?? '').trim();
+		const id = text(f, 'id');
+		const token = text(f, 'token');
 
 		// Same vagueness as the renew endpoint: a wrong token and an
 		// already-used or expired one look identical from the outside.

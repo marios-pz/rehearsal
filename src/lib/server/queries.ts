@@ -1,20 +1,25 @@
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import { db } from './db';
+import type { AdRow } from '$lib/types';
 
-export type AdLink = { kind: string; handle: string };
+export type { AdRow, AdLink } from '$lib/types';
 
-export type AdRow = {
-	public_id: string; band_name: string; blurb: string;
-	country_code: string;
-	display_lat: number; display_lng: number;
-	commitment: 'casual' | 'serious' | 'professional';
-	kind: 'member' | 'gig' | 'rehearsal';
-	event_at: string | null;
-	paid: boolean; days_left: number;
-	view_count: number;
-	needs: string[]; genres: string[];
-	links: AdLink[];
-};
+/** Rows, typed. `db.execute` is untyped by design, so the cast happens once
+ *  here instead of at every call site. */
+const rows = async <T>(query: SQL): Promise<T[]> => (await db.execute(query)) as unknown as T[];
+
+/** The single scalar a SQL function call returns, aliased `v` by every
+ *  caller below. Null means "no ad, or wrong token", deliberately
+ *  indistinguishable: telling them apart would let someone walk the
+ *  public_id space to discover which ads exist. */
+const scalar = async <T>(query: SQL): Promise<T | null> =>
+	(await rows<{ v: T | null }>(query))[0]?.v ?? null;
+
+/** Tokens are shown uppercase and pasted back by hand, so every lookup
+ *  normalises before hashing. */
+const normalize = (token: string) => token.trim().toUpperCase();
+
+const toDate = (iso: string | null) => (iso ? new Date(iso) : null);
 
 /**
  * Everything live in one country. Deliberately unfiltered by instrument or
@@ -22,8 +27,8 @@ export type AdRow = {
  * pages, and an empty page on a first visit is what kills a board before
  * the network exists.
  */
-export async function liveAds(countryCode: string): Promise<AdRow[]> {
-	const rows = await db.execute(sql`
+export const liveAds = (countryCode: string) =>
+	rows<AdRow>(sql`
 		select a.public_id, a.band_name, a.blurb, a.country_code,
 		       a.display_lat, a.display_lng, a.commitment, a.kind, a.event_at,
 		       a.paid, a.view_count,
@@ -37,56 +42,35 @@ export async function liveAds(countryCode: string): Promise<AdRow[]> {
 		where a.country_code = ${countryCode}
 		order by a.published_at desc
 	`);
-	return rows as unknown as AdRow[];
-}
 
+/** Drives the ad counts beside each country in the picker. */
 export async function adCountsByCountry(): Promise<Record<string, number>> {
-	const rows = await db.execute(sql`
-		select country_code, count(*)::int as n from ad_live group by country_code
-	`);
-	return Object.fromEntries(
-		(rows as unknown as { country_code: string; n: number }[]).map((r) => [r.country_code, r.n])
+	const counts = await rows<{ country_code: string; n: number }>(
+		sql`select country_code, count(*)::int as n from ad_live group by country_code`
 	);
+	return Object.fromEntries(counts.map((c) => [c.country_code, c.n]));
 }
 
 /** The click that opens an ad's full detail. Counted in the database, keyed
  *  on a hashed viewer so refresh-spam on the same ad within the window is
- *  absorbed rather than inflating the count; see record_ad_view(). Returns
- *  null for an id that is not (or no longer) live, same as a bad token
- *  elsewhere: nothing here distinguishes "wrong id" from "expired". */
-export async function recordAdView(publicId: string, viewerHash: Buffer): Promise<number | null> {
-	const rows = await db.execute(sql`
-		select record_ad_view(${publicId}, ${viewerHash.toString('hex')}) as view_count
-	`);
-	const v = (rows as unknown as { view_count: number | null }[])[0]?.view_count;
-	return v ?? null;
-}
+ *  absorbed rather than inflating the count. Null for an id that is not (or
+ *  no longer) live. */
+export const recordAdView = (publicId: string, viewerHash: Buffer) =>
+	scalar<number>(sql`select record_ad_view(${publicId}, ${viewerHash.toString('hex')}) as v`);
 
-export async function pingAd(publicId: string, token: string): Promise<Date | null> {
-	const rows = await db.execute(sql`
-		select ping_ad(${publicId}, ${token.trim().toUpperCase()}) as expires_at
-	`);
-	const v = (rows as unknown as { expires_at: string | null }[])[0]?.expires_at;
-	return v ? new Date(v) : null;
-}
+/** Extends an ad by 14 days from today. Non-stacking, by design: see the
+ *  greatest() in ping_ad itself. */
+export const pingAd = async (publicId: string, editToken: string) =>
+	toDate(await scalar<string>(sql`select ping_ad(${publicId}, ${normalize(editToken)}) as v`));
 
 /** The verify-link click. On success the ad flips to published; the edit
  *  token itself is minted separately, by the caller, only once this
  *  returns true. */
-export async function verifyAd(publicId: string, verifyToken: string): Promise<boolean> {
-	const rows = await db.execute(sql`
-		select verify_ad(${publicId}, ${verifyToken.trim().toUpperCase()}) as ok
-	`);
-	return Boolean((rows as unknown as { ok: boolean }[])[0]?.ok);
-}
+export const verifyAd = async (publicId: string, verifyToken: string) =>
+	(await scalar<boolean>(sql`select verify_ad(${publicId}, ${normalize(verifyToken)}) as v`)) === true;
 
 /** The day-11 reminder email's "renew now" link: a single-use token minted
  *  just for that email, never the real edit token (see the migration
  *  comment for why). */
-export async function renewViaNudge(publicId: string, nudgeToken: string): Promise<Date | null> {
-	const rows = await db.execute(sql`
-		select renew_via_nudge(${publicId}, ${nudgeToken.trim().toUpperCase()}) as expires_at
-	`);
-	const v = (rows as unknown as { expires_at: string | null }[])[0]?.expires_at;
-	return v ? new Date(v) : null;
-}
+export const renewViaNudge = async (publicId: string, nudgeToken: string) =>
+	toDate(await scalar<string>(sql`select renew_via_nudge(${publicId}, ${normalize(nudgeToken)}) as v`));

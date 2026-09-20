@@ -24,7 +24,7 @@ function isDbDown(err: unknown, depth = 0): boolean {
 /** The board depends on Postgres for nearly everything, so a dead database
  *  surfaces as an uncaught exception in a load function or action. Without
  *  this, that reaches the browser as SvelteKit's bare "500 / Internal
- *  Error" — no explanation, no way to tell a real outage from a bug. */
+ *  Error", with no explanation and no way to tell a real outage from a bug. */
 export const handleError: HandleServerError = ({ error, status }) => {
 	if (isDbDown(error)) {
 		console.error('database unreachable:', error);

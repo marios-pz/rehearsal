@@ -3,7 +3,7 @@ export type LatLng = { lat: number; lng: number };
 /**
  * Great-circle distance in kilometres. Client-safe geo math (mirrors
  * server/geo.ts's server-only geo math): used only to rank ads against the
- * searching musician's own position, which never leaves the browser — see
+ * searching musician's own position, which never leaves the browser. See
  * $lib/position.svelte.ts.
  */
 export function haversineKm(a: LatLng, b: LatLng): number {

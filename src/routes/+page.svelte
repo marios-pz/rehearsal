@@ -5,6 +5,8 @@
 	import { fold } from '$lib/fuzzy';
 	import { haversineKm } from '$lib/geo';
 	import { position } from '$lib/position.svelte';
+	import { DRAFT, readDraft, writeDraft, strings } from '$lib/session';
+	import type { AdRow, Bounds } from '$lib/types';
 	import { page } from '$app/state';
 	import { untrack, onMount } from 'svelte';
 	import type { PageData } from './$types';
@@ -14,7 +16,7 @@
 	// Seeded from the server load, then owned by the client: switching
 	// country refetches into these rather than navigating.
 	let cc = $state(untrack(() => data.cc));
-	let ads = $state<any[]>(untrack(() => data.ads));
+	let ads = $state<AdRow[]>(untrack(() => data.ads));
 
 	const fromUrl = (key: string) =>
 		untrack(() => (page.url.searchParams.get(key) ?? '').split(',').filter(Boolean));
@@ -22,36 +24,28 @@
 	let gen = $state<string[]>(fromUrl('g'));
 	let commit = $state<string[]>(fromUrl('m'));
 
-	// Session-only, not localStorage: a stray refresh shouldn't throw the
-	// whole selection away, but a filter chosen last week has no business
-	// resurfacing. A URL that already carries filters (a shared link, or
-	// the old /results redirect) wins over session state outright.
-	const SESSION_KEY = 'rehearsal:filters';
+	type Filters = { cc: string; inst: string[]; gen: string[]; commit: string[] };
+
+	// A URL that already carries filters (a shared link, or the old
+	// /results redirect) wins over the saved session outright.
 	let restored = $state(false);
 
 	onMount(() => {
 		position.request();
-		try {
-			const raw = page.url.searchParams.size === 0 && sessionStorage.getItem(SESSION_KEY);
-			if (!raw) { restored = true; return; }
-			const saved = JSON.parse(raw);
-			const apply = () => {
-				inst = Array.isArray(saved.inst) ? saved.inst : [];
-				gen = Array.isArray(saved.gen) ? saved.gen : [];
-				commit = Array.isArray(saved.commit) ? saved.commit : [];
-				restored = true;
-			};
-			if (saved.cc && saved.cc !== cc) switchCountry(saved.cc).then(apply);
-			else apply();
-		} catch {
+		const saved = page.url.searchParams.size === 0 ? readDraft<Filters>(DRAFT.filters) : null;
+		if (!saved) return void (restored = true);
+		const apply = () => {
+			inst = strings(saved.inst); gen = strings(saved.gen); commit = strings(saved.commit);
 			restored = true;
-		}
+		};
+		if (saved.cc && saved.cc !== cc) switchCountry(saved.cc).then(apply);
+		else apply();
 	});
 
 	$effect(() => {
 		if (!restored) return;
-		const snapshot = { cc, inst, gen, commit };
-		try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(snapshot)); } catch { /* private mode etc */ }
+		writeDraft(DRAFT.filters, { cc, inst, gen, commit } satisfies Filters);
+
 		const q = new URLSearchParams({ c: cc });
 		if (inst.length) q.set('i', inst.join(','));
 		if (gen.length) q.set('g', gen.join(','));
@@ -60,15 +54,15 @@
 	});
 
 	const countryItems = $derived(
-		data.countries.map((c: any) => ({
+		data.countries.map((c) => ({
 			id: c.c, label: c.n, sub: c.v && c.v !== c.n ? c.v : null, keys: c.k,
 			right: data.counts[c.c] ? `<b>${data.counts[c.c]}</b> ads` : 'be the first'
-		})).sort((a: any, b: any) => (data.counts[b.id] ?? 0) - (data.counts[a.id] ?? 0))
+		})).sort((a, b) => (data.counts[b.id] ?? 0) - (data.counts[a.id] ?? 0))
 	);
 
-	async function switchCountry(v: string) {
-		cc = v;
-		ads = await (await fetch(`/api/ads?c=${v}`)).json();
+	async function switchCountry(next: string) {
+		cc = next;
+		ads = await (await fetch(`/api/ads?c=${next}`)).json();
 	}
 
 	let selected = $state<string | null>(null);
@@ -79,15 +73,14 @@
 	// (Leaflet already only draws what's on-screen), but the list panel is,
 	// so it always matches the area currently in view rather than the
 	// whole country regardless of where the map is pointed.
-	let mapBounds = $state<{ south: number; west: number; north: number; east: number } | null>(null);
-	function withinBounds(a: any): boolean {
-		if (!mapBounds) return true;
-		return a.display_lat >= mapBounds.south && a.display_lat <= mapBounds.north &&
-			a.display_lng >= mapBounds.west && a.display_lng <= mapBounds.east;
-	}
+	let mapBounds = $state<Bounds | null>(null);
+	const inView = (a: AdRow) =>
+		!mapBounds ||
+		(a.display_lat >= mapBounds.south && a.display_lat <= mapBounds.north &&
+		 a.display_lng >= mapBounds.west && a.display_lng <= mapBounds.east);
 
 	// The "Find Me" button. locateTick is the actual trigger MapView reacts
-	// to (see its own comment) — a click either fires it immediately, if a
+	// to (see its own comment): a click either fires it immediately, if a
 	// position is already known, or arms wantsLocate so the effect below
 	// fires it the moment geolocation resolves instead of silently doing
 	// nothing on a cold, not-yet-answered permission prompt.
@@ -109,52 +102,66 @@
 
 	// Recruit (standing member posts) is the board's original purpose and
 	// stays the default; Gigs is the opt-in, mutually exclusive view. Not
-	// persisted across visits, same as `selected` — a fresh visit always
+	// persisted across visits, same as `selected`: a fresh visit always
 	// starts on Recruit.
 	let view = $state<'gigs' | 'recruit'>('recruit');
 	const showGigs = $derived(view === 'gigs');
-	const showStanding = $derived(view === 'recruit');
+
+	const OFFSCREEN = 'in this part of the map. Pan or zoom out to see more.';
+	const EMPTY = {
+		gigs: { none: 'No gigs posted yet.', offscreen: `No gigs ${OFFSCREEN}` },
+		recruit: { none: 'No open spots yet. Be the first to post one.', offscreen: `No open spots ${OFFSCREEN}` }
+	};
+	const empty = $derived(EMPTY[view]);
+
+	const distanceKm = (a: AdRow) => {
+		const p = position.coords;
+		return p ? haversineKm(p, { lat: a.display_lat, lng: a.display_lng }) : null;
+	};
+	const distanceLabel = (a: AdRow) => {
+		const km = distanceKm(a);
+		return km === null ? null : `${Math.round(km)} km away`;
+	};
 
 	// Replaces the old same-region bonus: a smooth falloff (halves every
 	// 50km, same peak weight the region bonus had at 0km) rather than a
-	// hard in/out bucket. Drops out entirely — never a filter — when
+	// hard in/out bucket. Drops out entirely, never a filter, when
 	// geolocation is denied or unavailable; the board stays fully usable.
-	const DISTANCE_MAX = 24, DISTANCE_HALFLIFE_KM = 50;
-	function distanceScore(a: any): number {
-		const p = position.coords;
-		if (!p) return 0;
-		return DISTANCE_MAX * Math.pow(2, -haversineKm(p, { lat: a.display_lat, lng: a.display_lng }) / DISTANCE_HALFLIFE_KM);
-	}
-	function distanceLabel(a: any): string | null {
-		const p = position.coords;
-		if (!p) return null;
-		return `${Math.round(haversineKm(p, { lat: a.display_lat, lng: a.display_lng }))} km away`;
-	}
-
+	//
 	// commitment is its own independent signal, same weight class as a
-	// single genre match — never coupled to `paid`, which stays its own
+	// single genre match, never coupled to `paid`, which stays its own
 	// untouched boolean throughout.
-	const score = (a: any) =>
-		(a.needs.some((n: string) => inst.includes(n)) ? 46 : 0) +
-		20 * a.genres.filter((g: string) => gen.includes(g)).length +
-		distanceScore(a) +
-		(commit.includes(a.commitment) ? 15 : 0);
-	const ranked = (list: any[]) => [...list].sort((x, y) => score(y) - score(x));
+	const DISTANCE_MAX = 24, DISTANCE_HALFLIFE_KM = 50;
+	function score(a: AdRow): number {
+		const km = distanceKm(a);
+		return (a.needs.some((n) => inst.includes(n)) ? 46 : 0) +
+			20 * a.genres.filter((g) => gen.includes(g)).length +
+			(km === null ? 0 : DISTANCE_MAX * Math.pow(2, -km / DISTANCE_HALFLIFE_KM)) +
+			(commit.includes(a.commitment) ? 15 : 0);
+	}
 
 	// A gig or a rehearsal is a dated, short-term ask, so it sorts by
 	// soonest first rather than by relevance score: a plausible-but-distant
 	// match is less useful than an exact one an hour before it starts.
 	// "Looking for a member" ads have no date and keep the original ranking.
-	const byWhen = (x: any, y: any) => new Date(x.event_at).getTime() - new Date(y.event_at).getTime();
-	const standing = $derived(ranked(ads.filter((a: any) => a.kind === 'member')));
-	const dated = $derived([...ads.filter((a: any) => a.kind !== 'member')].sort(byWhen));
-	const visible = $derived(showGigs ? dated : standing);
+	const soonest = (x: AdRow, y: AdRow) =>
+		new Date(x.event_at ?? 0).getTime() - new Date(y.event_at ?? 0).getTime();
 
-	// Pins (fed to the map) stay the full set above; these, used only for
-	// the list panel and its count, additionally narrow to what's in view.
-	const standingInView = $derived(standing.filter(withinBounds));
-	const datedInView = $derived(dated.filter(withinBounds));
-	const visibleInView = $derived(showGigs ? datedInView : standingInView);
+	// Pins stay the full set for the current view; the list additionally
+	// narrows to what the map is actually showing.
+	const visible = $derived(
+		showGigs
+			? ads.filter((a) => a.kind !== 'member').sort(soonest)
+			: ads.filter((a) => a.kind === 'member').sort((x, y) => score(y) - score(x))
+	);
+	const visibleInView = $derived(visible.filter(inView));
+
+	const pins = $derived(
+		visible.map((a) => ({
+			id: a.public_id, lat: a.display_lat, lng: a.display_lng, paid: a.paid,
+			label: (a.needs[0] ?? '').split('-')[0].toUpperCase()
+		}))
+	);
 
 	function formatEventAt(iso: string): string {
 		const d = new Date(iso);
@@ -166,23 +173,15 @@
 		return `${d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}, ${time}`;
 	}
 
-	const pins = $derived(visible.map((a: any) => ({
-		id: a.public_id, lat: a.display_lat, lng: a.display_lng, paid: a.paid,
-		label: (a.needs[0] ?? '').split('-')[0].toUpperCase()
-	})));
-
-	const open = $derived(ads.find((a: any) => a.public_id === selected));
-	function pick(id: string) {
-		selected = selected === id ? null : id;
-	}
+	const open = $derived(ads.find((a) => a.public_id === selected));
+	const pick = (id: string) => (selected = selected === id ? null : id);
 
 	// The server is the one actually counting (see /api/ads/[id]/view and
 	// record_ad_view()), so this only needs to fire once per ad per page
 	// load. Refresh-spam and repeat clicks are already absorbed server-side
 	// by a per-viewer window; this set just skips the redundant request.
 	const viewOverrides = $state<Record<string, number>>({});
-	const viewCount = (a: { public_id: string; view_count: number }) =>
-		viewOverrides[a.public_id] ?? a.view_count;
+	const viewsOf = (a: AdRow) => viewOverrides[a.public_id] ?? a.view_count;
 	const seenViews = new Set<string>();
 	$effect(() => {
 		const id = selected;
@@ -196,28 +195,52 @@
 
 	// Links are stored as whatever URL the poster pasted; only missing the
 	// scheme gets fixed up, nothing else about the link is second-guessed.
-	const toHref = (url: string) => /^https?:\/\//i.test(url) ? url : `https://${url}`;
+	const toHref = (url: string) => (/^https?:\/\//i.test(url) ? url : `https://${url}`);
+
+	const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 </script>
 
-{#snippet eye()}
-	<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor"
-		stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-		<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z" />
-		<circle cx="12" cy="12" r="3" />
-	</svg>
+{#snippet views(a: AdRow)}
+	<span class="views" title={plural(viewsOf(a), 'view')}>
+		<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor"
+			stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z" />
+			<circle cx="12" cy="12" r="3" />
+		</svg>{viewsOf(a)}
+	</span>
 {/snippet}
 
-{#snippet gigCard(a: any)}
+{#snippet tags(a: AdRow, withGenres: boolean)}
+	<div class="row">
+		{#each a.needs as n}<span class="tag" class:hit={inst.includes(n)}>Needs {LABEL[n] ?? n}</span>{/each}
+		{#if withGenres}
+			{#each a.genres as g}<span class="tag" class:hit={gen.includes(g)}>{LABEL[g] ?? g}</span>{/each}
+		{/if}
+	</div>
+{/snippet}
+
+{#snippet gigCard(a: AdRow)}
 	<button class="card gigcard" class:on={selected === a.public_id} onclick={() => pick(a.public_id)}>
-		<div class="gigwhen">{formatEventAt(a.event_at)}</div>
+		<div class="gigwhen">{formatEventAt(a.event_at ?? '')}</div>
 		<h3>{a.band_name}</h3>
-		<span class="views" title="{viewCount(a)} view{viewCount(a) === 1 ? '' : 's'}">
-			{@render eye()}{viewCount(a)}
-		</span>
+		{@render views(a)}
 		<div class="meta">{LABEL[a.kind]}{#if distanceLabel(a)} · {distanceLabel(a)}{/if}</div>
-		<div class="row">
-			{#each a.needs as n}<span class="tag" class:hit={inst.includes(n)}>Needs {LABEL[n] ?? n}</span>{/each}
+		{@render tags(a, false)}
+	</button>
+{/snippet}
+
+{#snippet adCard(a: AdRow)}
+	<button class="card" class:on={selected === a.public_id} onclick={() => pick(a.public_id)}
+		onpointerenter={() => (hot = a.public_id)} onpointerleave={() => (hot = null)}>
+		<h3>{a.band_name}</h3>
+		<span class="lvl" class:hit={commit.includes(a.commitment)}>{a.commitment}</span>
+		{@render views(a)}
+		<div class="meta">
+			{#if distanceLabel(a)}{distanceLabel(a)} · {/if}
+			{#if a.paid}<span class="paid">Paid</span> · {/if}
+			<span class="expiry" class:soon={a.days_left <= 3}>{a.days_left}d left</span>
 		</div>
+		{@render tags(a, true)}
 	</button>
 {/snippet}
 
@@ -227,7 +250,7 @@
 		<Combobox items={countryItems} value={cc} flag label="Country"
 			placeholder="Search a country" group="Where bands are posting"
 			noMatch="No country matches. Try the local spelling."
-			onchange={(v) => v && switchCountry(v)} />
+			onchange={(v) => v && switchCountry(v as string)} />
 	</div>
 	<div class="filtercol">
 		<label for="instruments">I play</label>
@@ -262,48 +285,25 @@
 </div>
 
 <div class="switch" style="margin-bottom:16px">
-	<button type="button" class="switchbtn" class:on={view === 'gigs'} onclick={() => (view = 'gigs')}>Gigs</button>
-	<button type="button" class="switchbtn" class:on={view === 'recruit'} onclick={() => (view = 'recruit')}>Recruit</button>
+	<button type="button" class="switchbtn" class:on={showGigs} onclick={() => (view = 'gigs')}>Gigs</button>
+	<button type="button" class="switchbtn" class:on={!showGigs} onclick={() => (view = 'recruit')}>Recruit</button>
 </div>
 
 <div class="board veil">
 	<div class="split">
 		<div>
-			<p class="count">{visibleInView.length} ad{visibleInView.length === 1 ? '' : 's'} in view</p>
+			<p class="count">{plural(visibleInView.length, 'ad')} in view</p>
 			<div class="list">
 				{#if zoomGated}
 					<p class="hint">Zoom in on the map to see ads in that area.</p>
-				{:else if showGigs}
-					{#each datedInView as a (a.public_id)}{@render gigCard(a)}{/each}
-					{#if !dated.length}
-						<p class="hint">No gigs posted yet.</p>
-					{:else if !datedInView.length}
-						<p class="hint">No gigs in this part of the map. Pan or zoom out to see more.</p>
-					{/if}
 				{:else}
-					{#each standingInView as a (a.public_id)}
-						<button class="card" class:on={selected === a.public_id}
-							onclick={() => pick(a.public_id)}
-							onpointerenter={() => (hot = a.public_id)} onpointerleave={() => (hot = null)}>
-							<h3>{a.band_name}</h3><span class="lvl" class:hit={commit.includes(a.commitment)}>{a.commitment}</span>
-							<span class="views" title="{viewCount(a)} view{viewCount(a) === 1 ? '' : 's'}">
-								{@render eye()}{viewCount(a)}
-							</span>
-							<div class="meta">
-								{#if distanceLabel(a)}{distanceLabel(a)} · {/if}
-								{#if a.paid}<span class="paid">Paid</span> · {/if}
-								<span class="expiry" class:soon={a.days_left <= 3}>{a.days_left}d left</span>
-							</div>
-							<div class="row">
-								{#each a.needs as n}<span class="tag" class:hit={inst.includes(n)}>Needs {LABEL[n] ?? n}</span>{/each}
-								{#each a.genres as g}<span class="tag" class:hit={gen.includes(g)}>{LABEL[g] ?? g}</span>{/each}
-							</div>
-						</button>
+					{#each visibleInView as a (a.public_id)}
+						{#if showGigs}{@render gigCard(a)}{:else}{@render adCard(a)}{/if}
 					{/each}
-					{#if !standing.length}
-						<p class="hint">No open spots yet. Be the first to post one.</p>
-					{:else if !standingInView.length}
-						<p class="hint">No open spots in this part of the map. Pan or zoom out to see more.</p>
+					{#if !visible.length}
+						<p class="hint">{empty.none}</p>
+					{:else if !visibleInView.length}
+						<p class="hint">{empty.offscreen}</p>
 					{/if}
 				{/if}
 			</div>
@@ -321,9 +321,7 @@
 	<div class="board detail veil">
 		<div class="detailhead">
 			<h2>{open.band_name}</h2>
-			<span class="views" title="{viewCount(open)} view{viewCount(open) === 1 ? '' : 's'}">
-				{@render eye()}{viewCount(open)}
-			</span>
+			{@render views(open)}
 		</div>
 		<div class="meta">
 			{#if open.kind !== 'member' && open.event_at}
@@ -334,10 +332,7 @@
 			{#if distanceLabel(open)} · {distanceLabel(open)}{/if}
 		</div>
 		<p class="note">{open.blurb}</p>
-		<div class="row">
-			{#each open.needs as n}<span class="tag" class:hit={inst.includes(n)}>Needs {LABEL[n] ?? n}</span>{/each}
-			{#each open.genres as g}<span class="tag" class:hit={gen.includes(g)}>{LABEL[g] ?? g}</span>{/each}
-		</div>
+		{@render tags(open, true)}
 		<div class="row" style="margin-top:10px">
 			{#each open.links as l}
 				<a class="social" href={toHref(l.handle)} target="_blank" rel="noopener noreferrer nofollow">
@@ -347,7 +342,7 @@
 		</div>
 		<p class="hint" style="margin-top:10px">
 			Contact happens on their socials. This board only holds the ad, and it comes down
-			in {open.days_left} day{open.days_left === 1 ? '' : 's'} unless they renew.
+			in {plural(open.days_left, 'day')} unless they renew.
 			The pin is accurate to about 700m, not to the door.
 		</p>
 	</div>

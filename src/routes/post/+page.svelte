@@ -4,13 +4,15 @@
 	import MapView from '$lib/components/MapView.svelte';
 	import { fold } from '$lib/fuzzy';
 	import { INSTRUMENTS, GENRES, COMMITMENTS, SOCIAL_KINDS, AD_KINDS } from '$lib/taxonomy';
+	import { DRAFT, readDraft, writeDraft, clearDraft, strings } from '$lib/session';
+	import type { LatLng } from '$lib/types';
 	import { onMount } from 'svelte';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let cc = $state('GR');
-	let pin = $state<{ lat: number; lng: number } | null>(null);
+	let pin = $state<LatLng | null>(null);
 	let bandName = $state('');
 	let blurb = $state('');
 	let address = $state('');
@@ -20,7 +22,7 @@
 	let kind = $state<string>('member');
 	// A bare datetime-local value ("2026-09-10T19:00") has no timezone, so
 	// it's converted to a real ISO instant right here, in the browser,
-	// using the browser's own timezone (the poster's) — the hidden field
+	// using the browser's own timezone (the poster's). The hidden field
 	// actually submitted carries that ISO string, not the raw input value.
 	let eventAtLocal = $state('');
 	const eventAtIso = $derived(eventAtLocal ? new Date(eventAtLocal).toISOString() : '');
@@ -31,56 +33,51 @@
 
 	const socialsReady = $derived(socialKinds.some((k) => socialLinks[k]?.trim()));
 
-	// A half-written ad is real work too, same reasoning as the find-page
-	// filters: session-only (not localStorage), and cleared the moment a
-	// submission actually goes through so the next visit starts blank.
-	const SESSION_KEY = 'rehearsal:post-draft';
+	// A half-written ad is real work too, same reasoning as the board's
+	// filters: session-only, and cleared the moment a submission actually
+	// goes through so the next visit starts blank.
+	type Draft = {
+		cc: string; pin: LatLng | null; bandName: string; blurb: string; address: string;
+		inst: string[]; gen: string[]; commitment: string; kind: string; eventAtLocal: string;
+		paid: boolean; socialKinds: string[]; socialLinks: Record<string, string>; email: string;
+	};
 	let restored = $state(false);
 
 	onMount(() => {
-		try {
-			const raw = sessionStorage.getItem(SESSION_KEY);
-			if (raw) {
-				const saved = JSON.parse(raw);
-				bandName = saved.bandName ?? '';
-				blurb = saved.blurb ?? '';
-				address = saved.address ?? '';
-				commitment = saved.commitment ?? 'casual';
-				kind = saved.kind ?? 'member';
-				eventAtLocal = saved.eventAtLocal ?? '';
-				paid = !!saved.paid;
-				inst = Array.isArray(saved.inst) ? saved.inst : [];
-				gen = Array.isArray(saved.gen) ? saved.gen : [];
-				socialKinds = Array.isArray(saved.socialKinds) ? saved.socialKinds : [];
-				socialLinks = saved.socialLinks && typeof saved.socialLinks === 'object' ? saved.socialLinks : {};
-				email = saved.email ?? '';
-				pin = saved.pin ?? null;
-				if (saved.cc) cc = saved.cc;
-			}
-		} catch {
-			/* ignore a corrupt or inaccessible session entry */
-		} finally {
-			restored = true;
+		const saved = readDraft<Draft>(DRAFT.post);
+		if (saved) {
+			cc = saved.cc ?? cc;
+			pin = saved.pin ?? null;
+			bandName = saved.bandName ?? '';
+			blurb = saved.blurb ?? '';
+			address = saved.address ?? '';
+			commitment = saved.commitment ?? 'casual';
+			kind = saved.kind ?? 'member';
+			eventAtLocal = saved.eventAtLocal ?? '';
+			paid = !!saved.paid;
+			inst = strings(saved.inst);
+			gen = strings(saved.gen);
+			socialKinds = strings(saved.socialKinds);
+			socialLinks = saved.socialLinks ?? {};
+			email = saved.email ?? '';
 		}
+		restored = true;
 	});
 
 	$effect(() => {
 		if (!restored) return;
-		const snapshot = {
+		writeDraft(DRAFT.post, {
 			cc, pin, bandName, blurb, address, inst, gen, commitment, kind, eventAtLocal, paid,
 			socialKinds, socialLinks, email
-		};
-		try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(snapshot)); } catch { /* private mode etc */ }
+		} satisfies Draft);
 	});
 
 	$effect(() => {
-		if (form?.posted) {
-			try { sessionStorage.removeItem(SESSION_KEY); } catch { /* private mode etc */ }
-		}
+		if (form?.posted) clearDraft(DRAFT.post);
 	});
 
 	const countryItems = $derived(
-		data.countries.map((c: any) => ({
+		data.countries.map((c) => ({
 			id: c.c, label: c.n, sub: c.v && c.v !== c.n ? c.v : null, keys: c.k
 		}))
 	);

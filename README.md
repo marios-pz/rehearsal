@@ -89,7 +89,7 @@ graph TB
 
 SvelteKit with `adapter-node`, Svelte 5 runes throughout, no stores.
 
-- `src/routes/` &nbsp;`/` (map + list, ranked, filters live beside it —
+- `src/routes/` &nbsp;`/` (map + list, ranked, filters live beside it,
   no separate results page), `/post` (create), `/renew` (extend or edit by
   token), `/api/ads` (JSON, backs the country switch without a full
   navigation)
@@ -228,16 +228,16 @@ tile URL is the only place the decision lives.
 
 There used to be a per-country admin-1 region picker backed by hand-built
 GeoJSON (`tools/build-geo.py`, one file per country). It only ever covered 4
-countries and needed a Python run for every new one, so it's gone — country
+countries and needed a Python run for every new one, so it's gone. Country
 is the only geography a musician picks by hand now. `MapView.svelte` frames
 itself on whatever pins it's given (`fitBounds`), or on the searching
 musician's own `navigator.geolocation` position when there are none yet, or
-on a generic world view when neither is available — no per-country data file
+on a generic world view when neither is available, with no per-country data file
 of any kind. Below a minimum zoom the pin layer hides and both the map and
 the list prompt to zoom in, the same idea as Airbnb's "search this area."
 
-Posting an ad sends Leaflet's own click event straight through — real
-lat/lng, no pixel-space projection involved — and the server only jitters
+Posting an ad sends Leaflet's own click event straight through: real
+lat/lng, no pixel-space projection involved, and the server only jitters
 and stores it.
 
 ## Ranking, not filtering
@@ -245,7 +245,7 @@ and stores it.
 `liveAds()` returns everything live in a country and the client ranks it:
 instrument match 46, each genre overlap 20, distance from the searching
 musician's own geolocation (a smooth falloff, halving every 50km, peaking
-at 24 — never a hard cutoff, and it drops out entirely if geolocation is
+at 24, never a hard cutoff, and it drops out entirely if geolocation is
 denied). Nothing is hidden. Hard filters produce empty pages, and an empty
 page on a first visit is what kills a board before its network exists.
 
@@ -261,8 +261,13 @@ src/lib/position.svelte.ts  shared one-shot geolocation request
 src/lib/server/token.ts     mint, hash, constant-time compare
 src/lib/components/         Combobox, MapView (Leaflet + OpenStreetMap)
 src/routes/                 / (map + list), /post, /renew, /api/ads
+src/lib/types.ts            the shapes that cross the server/client line
+src/lib/session.ts          sessionStorage drafts (filters, half-written ad)
+src/lib/server/form.ts      FormData readers shared by every action
 src/lib/data/               countries.json
 ```
+
+Every endpoint and form action is documented in [API.md](API.md).
 
 ## Not built yet
 
