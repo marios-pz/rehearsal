@@ -12,6 +12,7 @@
     "db:generate": "node --env-file-if-exists=.env node_modules/.bin/drizzle-kit generate",
     "db:studio": "node --env-file-if-exists=.env node_modules/.bin/drizzle-kit studio",
     "send-reminders": "node --env-file-if-exists=.env scripts/send-reminders.js",
+    "seed-demo": "node --env-file-if-exists=.env scripts/seed-demo.js",
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {

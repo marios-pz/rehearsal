@@ -101,6 +101,25 @@ async function main() {
     const seeded = await seedReference(sql);
     log(c.dim(`reference data: ${seeded}`));
 
+    /* ---- reap -------------------------------------------------------- */
+    // An expired ad is invisible (ad_live filters it out) but the row is
+    // still there, holding a contact email, a street address and the exact
+    // position of a rehearsal room. "Ads die after 14 days and are deleted,
+    // not archived" has to be true of the table, not just of the view.
+    //
+    // Here, at boot, because this is the only thing that provably runs
+    // before the server serves a request, on both `npm run dev` and
+    // `npm start`. Relaunching after five months of downtime therefore
+    // clears five months of dead rows before anything is served. A
+    // long-running instance never boots again, so send-reminders.js reaps
+    // too; that job already has to run daily.
+    const [{ reap_expired_ads: reaped }] = await sql`select reap_expired_ads()`;
+    log(
+      reaped
+        ? c.yellow(`reaped ${reaped} expired ad${reaped === 1 ? "" : "s"}`)
+        : c.dim("no expired ads to reap"),
+    );
+
     console.log(c.green("   ready\n"));
   } finally {
     await sql`select pg_advisory_unlock(${LOCK_ID})`.catch(() => {});

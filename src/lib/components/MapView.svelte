@@ -24,7 +24,7 @@
 		// map. This component only reports the viewport, it never filters
 		// `pins` itself (Leaflet already only draws what's on-screen).
 		onbounds?: (b: Bounds) => void;
-		// The "Find Me" button's target: incrementing locateTick (a click)
+		// The "Search Near Me" button's target: incrementing locateTick (a click)
 		// drops a marker at meCoords and flies there. meCoords alone never
 		// triggers this: geolocation already resolves silently on mount to
 		// feed the ranking distance term, and that must never itself yank
@@ -48,6 +48,16 @@
 	const WORLD_CENTER: [number, number] = [20, 10];
 	const WORLD_ZOOM = 2;
 	const LOCAL_ZOOM = 11;
+	const FIT_MAX_ZOOM = 12;
+	const FIT_PADDING: [number, number] = [40, 40];
+
+	const pinBounds = () => L.latLngBounds(pins.map((p) => [p.lat, p.lng] as [number, number]));
+
+	// Which ads are on the map, independent of their order. Re-ranking
+	// hands this component a brand new array holding the same ads, so
+	// keying the framing effect on `pins` itself re-fitted the map every
+	// time a filter changed. Sorted, so a reorder alone is not a change.
+	const pinSetKey = $derived(pins.map((p) => p.id).sort().join(','));
 
 	// Frames on the pins themselves when there are any (real tiles already
 	// carry enough geographic context that a drawn region outline on top
@@ -56,7 +66,7 @@
 	// view if not, with no per-country data involved either way.
 	function frame() {
 		if (pins.length) {
-			map.fitBounds(pins.map((p) => [p.lat, p.lng] as [number, number]), { padding: [40, 40], maxZoom: 12 });
+			map.fitBounds(pinBounds(), { padding: FIT_PADDING, maxZoom: FIT_MAX_ZOOM });
 		} else {
 			const p = position.coords;
 			map.setView(p ? [p.lat, p.lng] : WORLD_CENTER, p ? LOCAL_ZOOM : WORLD_ZOOM);
@@ -73,8 +83,18 @@
 	// here, the read/write themselves are the point) keeps that reaction
 	// out of the effect's dependency list; the native 'zoomend' listener
 	// calls this outside any tracked context, so it needs no such wrapping.
+	//
+	// The floor is minZoom OR the zoom at which every pin fits, whichever is
+	// lower. Ads spread across a whole country fit at a zoom below minZoom,
+	// so a fixed floor made the ALL button hide every pin it had just
+	// framed: fitBounds landed at zoom 7, the gate fired at 8, and the list
+	// emptied itself. Whatever "fit all pins" produces is by definition a
+	// view worth showing, so the gate can never fire there.
 	function applyGate() {
-		const should = minZoom > 0 && pins.length > 0 && map.getZoom() < minZoom;
+		const floor = pins.length
+			? Math.min(minZoom, map.getBoundsZoom(pinBounds(), false, L.point(FIT_PADDING)), FIT_MAX_ZOOM)
+			: minZoom;
+		const should = minZoom > 0 && pins.length > 0 && map.getZoom() < floor;
 		if (should === zoomGated) return;
 		zoomGated = should;
 		onzoomgate?.(should);
@@ -154,8 +174,10 @@
 		});
 	}
 
-	// Redraws whenever the pin set or the selected/hot ids change, and
-	// once more the moment the map itself becomes ready.
+	// Marker redraw only. This depends on `selected` and `hot` because the
+	// icon encodes both, so it must never move the map: framing from in
+	// here meant every card click and every card hover re-fitted the view
+	// to all pins, which looked like "clicking an ad zooms back out".
 	$effect(() => {
 		if (!ready) return;
 		pinLayer.clearLayers();
@@ -167,13 +189,36 @@
 			});
 			marker.addTo(pinLayer);
 		}
-		frame();
 		untrack(applyGate);
-		untrack(reportBounds);
+	});
+
+	// Framing, keyed on which ads are shown rather than on the array. A
+	// country switch or the Gigs/Recruit toggle re-frames; reordering,
+	// hovering and selecting do not.
+	$effect(() => {
+		pinSetKey;
+		if (!ready) return;
+		untrack(() => {
+			frame();
+			applyGate();
+			reportBounds();
+		});
+	});
+
+	// Selecting an ad flies to its pin. Never zooms out: if the musician
+	// is already closer in than LOCAL_ZOOM, the zoom is left alone and
+	// this only pans. Deselecting leaves the map exactly where it is.
+	$effect(() => {
+		const id = selected;
+		if (!ready || !id) return;
+		untrack(() => {
+			const p = pins.find((x) => x.id === id);
+			if (p) map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), LOCAL_ZOOM), { duration: 0.6 });
+		});
 	});
 
 	// Keyed on locateTick alone (not meCoords) so this only ever fires from
-	// an actual "Find Me" click, never from geolocation quietly resolving
+	// an actual "Search Near Me" click, never from geolocation quietly resolving
 	// in the background for the ranking distance term.
 	$effect(() => {
 		if (locateTick === 0 || !map) return;
@@ -269,7 +314,7 @@
 	:global(.lf-pin.paid) { border-color: var(--stamp); }
 
 	/* One dot, two colours: the pin-drop crosshair on /post (marker yellow)
-	   and "you are here" from the Find Me button (stamp red, matching its
+	   and "you are here" from the Search Near Me button (stamp red, matching its
 	   own button). --dot is the only thing that differs between them. */
 	:global(.lf-dot) { position: relative; width: 100%; height: 100%; }
 	:global(.lf-drop) { --dot: var(--marker); }

@@ -13,6 +13,7 @@ SQL functions underneath both, which are where the rules actually live.
 | --- | --- | --- |
 | [Live ads in a country](#get-apiads) | `/api/ads` | `GET` |
 | [Record an ad view](#post-apiadsidview) | `/api/ads/{id}/view` | `POST` |
+| [Report an ad](#post-apiadsidreport) | `/api/ads/{id}/report` | `POST` |
 | [Legacy results redirect](#get-results) | `/results` | `GET` |
 | [Create an ad](#post-post) | `/post` | `POST` (default action) |
 | [Confirm an email](#post-verify) | `/verify` | `POST` (default action) |
@@ -100,6 +101,51 @@ The two are indistinguishable on purpose.
 
 ```bash
 curl -X POST 'http://localhost:5173/api/ads/k3f9qa/view'
+```
+
+### `POST /api/ads/{id}/report`
+
+The red flag on an ad card. No token and no account: reporting has to work
+for the person who just found the ad, which is everybody.
+
+**Path parameters**
+
+| Name | Description |
+| --- | --- |
+| `id` | The ad's `public_id`. |
+
+**Body** (`application/json`)
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `reason` | yes | One of `spam`, `impersonation`, `offensive`, `stale`, `other`. Must match the `reason_known` check on the table; the list lives in `src/lib/taxonomy.ts` as `REPORT_REASONS`. |
+| `detail` | no | Free text, trimmed and truncated to 600 characters. |
+
+**Responses**
+
+`202` `{ "ok": true }` for a live ad, a repeat click, **and** an id that
+does not exist. All three are identical from outside, for the same reason
+the token endpoints are vague: a 404 here would be a way to test which
+`public_id`s are real.
+
+`400` `unknown reason`, the only thing that fails loudly. A client sending
+a reason outside the list is a bug, not a probe.
+
+**Deduplication.** One report per `(ad, hashed reporter)` per 24 hours,
+through `rate_bucket`, the same mechanism as view counting. A repeat click
+returns 202, writes no row, and sends no email, so nobody can bury an ad by
+mashing the flag or flood the admin inbox.
+
+**The email.** A newly recorded report emails `ADMIN_EMAIL` with the band
+name, reason, ad code, a link, and the detail text. If `ADMIN_EMAIL` is
+unset or the send fails, the report is still committed and a warning goes
+to the log: losing the notification is annoying, losing the report because
+the notification failed would be worse.
+
+```bash
+curl -X POST 'http://localhost:3000/api/ads/k3f9qa/report' \
+  -H 'content-type: application/json' \
+  -d '{"reason":"impersonation","detail":"this is not their instagram"}'
 ```
 
 ### `GET /results`
@@ -238,7 +284,7 @@ calls them live in Postgres, so they hold for `psql` too.
 
 | View | What it is |
 | --- | --- |
-| `ad_live` | Every ad that is `published` and not past `expires_at`. Expiry is a **predicate, not a cron job**, so an expired ad cannot be served even if nothing has cleaned it up. |
+| `ad_live` | Every ad that is `published` and not past `expires_at`. Expiry is a **predicate, not a cron job**, so an expired ad cannot be served even in the window before `reap_expired_ads()` deletes the row. |
 | `ad_needs_reminder` | Published ads 3 days or less from expiry that have not been reminded yet. Read by `scripts/send-reminders.js`. |
 
 ### Functions
@@ -249,9 +295,10 @@ calls them live in Postgres, so they hold for `psql` too.
 | `verify_ad(public_id, verify_token)` | `boolean` | Publishes the ad and clears the verify token. |
 | `renew_via_nudge(public_id, nudge_token)` | `timestamptz` or `null` | Single-use, consumes the token. |
 | `record_ad_view(public_id, viewer_hash, window default '30 minutes')` | `integer` or `null` | Increments at most once per viewer per window. |
+| `report_ad(public_id, reason, detail, reporter_hash, window default '24 hours')` | `text` or `null` | Band name when newly recorded, `''` when this reporter already flagged it, `null` when not live. The caller emails only on a band name. |
 | `close_role(public_id, token, instrument)` | `boolean` | Marks one open role filled. **No route calls this yet.** |
 | `delete_ad(public_id, token)` | `boolean` | Token-gated takedown. **No route calls this yet.** |
-| `reap_expired_ads(grace default '24 hours')` | `integer` | Deletes rows already invisible via `ad_live`. **Nothing schedules this yet.** |
+| `reap_expired_ads(grace default '24 hours')` | `integer` | Hard-deletes ads more than `grace` past expiry, cascading to roles, genres, links and reports. Called on every boot by `bootstrap.js` and again by `send-reminders.js`. |
 | `jitter_position(lat, lng, metres)` | `record` | The 700m push behind `display_lat`/`display_lng`. |
 
 Every token-gated function returns `null` or `false` for both a wrong token
@@ -288,9 +335,9 @@ the only thing preventing enumeration in a system with no accounts.
 
 ### Rate limiting
 
-`rate_bucket` currently backs only the per-viewer view window. `POST /post`
-has no rate limit yet. With no accounts, that table and `report` are the
-only levers against abuse that exist.
+`rate_bucket` backs the per-viewer view window and the per-reporter report
+window. `POST /post` still has no rate limit. With no accounts, that table
+and `report` are the only levers against abuse that exist.
 
 ---
 
@@ -298,12 +345,10 @@ only levers against abuse that exist.
 
 These are named here so nobody goes looking for a route that does not exist.
 
-- **`report` submission.** The `report` table and its `reason` check
-  constraint are in the schema and staying there; report buttons and the
-  endpoint behind them are still to come.
 - **Role closing and ad deletion.** `close_role()` and `delete_ad()` work in
   SQL. No HTTP surface reaches them.
-- **Scheduling.** `scripts/send-reminders.js` and `reap_expired_ads()` both
-  work and both need a cron entry, a systemd timer, or a platform scheduler.
-  Once a day is plenty; the reminder window is 3 days wide.
+- **Scheduling for the reminder email.** `scripts/send-reminders.js` needs a
+  cron entry, a systemd timer, or a platform scheduler. Once a day is plenty;
+  the reminder window is 3 days wide. Reaping no longer waits on this: it
+  runs at boot and again inside that same job.
 - **Rate limiting on writes.** See above.

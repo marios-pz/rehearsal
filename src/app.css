@@ -69,17 +69,17 @@ h1.pop:hover { color: #08080a; text-shadow: none; }
 
 /* Centered under the filter row: with 4 equal .filtercol tracks, the page
    center already falls between columns 2 (I play) and 3 (Genre). */
-.findmerow { text-align: center; margin: 14px 0 18px; }
-.findme {
+.nearmerow { text-align: center; margin: 14px 0 18px; }
+.nearme {
 	display: inline-flex; align-items: center; gap: 7px; font: inherit;
 	font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
 	background: #f3f1ea; color: #08080a; border: 1px solid #f3f1ea;
 	padding: 9px 16px; cursor: pointer;
 	transition: transform .12s var(--ease), box-shadow .12s var(--ease);
 }
-.findme svg { color: var(--stamp); flex: none; }
-.findme:hover { transform: translateY(-1px); box-shadow: 0 2px 0 #00000055; }
-.findme:active { transform: translateY(0); box-shadow: none; }
+.nearme svg { color: var(--stamp); flex: none; }
+.nearme:hover { transform: translateY(-1px); box-shadow: 0 2px 0 #00000055; }
+.nearme:active { transform: translateY(0); box-shadow: none; }
 .switch { display: flex; gap: 8px; flex: none; }
 .switch a { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; padding: 8px 12px;
             color: var(--dim); text-decoration: none; border: 1px solid var(--line); }
@@ -239,3 +239,64 @@ button.go[disabled] { opacity: .3; cursor: not-allowed; }
 }
 .coffee-fab:hover { background: var(--marker); color: #08080a; border-color: var(--marker); }
 @media (max-width: 560px) { .coffee-fab { padding: 8px 11px; font-size: 10px; bottom: 10px; right: 10px; } }
+
+/* ---- Reporting ------------------------------------------------------- */
+/* The flag is a sibling of the card, not a child: the card is itself a
+   button element, and a button cannot contain another one. The wrapper
+   exists only to give it something to position against. */
+.cardwrap { position: relative; margin-bottom: 8px; }
+.cardwrap .card { margin-bottom: 0; }
+/* The card's clip-path eats its own bottom-right corner, so the flag sits
+   inside that notch rather than floating over the missing pixels, and the
+   tag row reserves the width so a long tag never slides underneath. */
+.cardwrap .row { padding-right: 24px; }
+.flag {
+  position: absolute; right: 9px; bottom: 7px; z-index: 2;
+  width: 18px; height: 18px; padding: 0; line-height: 1;
+  font: inherit; font-size: 12px; font-weight: 700;
+  background: transparent; color: var(--dim);
+  border: 1px solid var(--line); border-radius: 50%;
+  cursor: pointer; opacity: .45;
+  transition: opacity .18s var(--ease), color .18s var(--ease), border-color .18s var(--ease);
+}
+.cardwrap:hover .flag { opacity: 1; }
+.flag:hover, .flag:focus-visible { color: var(--stamp); border-color: var(--stamp); opacity: 1; }
+/* Touch has no hover, so the flag is always visible there, and bigger. */
+@media (hover: none) {
+  .flag { opacity: .7; width: 24px; height: 24px; font-size: 14px; }
+}
+
+.reportlink {
+  font: inherit; font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+  background: none; border: 0; padding: 0; margin-top: 12px;
+  color: var(--dim); cursor: pointer; text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.reportlink:hover { color: var(--stamp); }
+
+/* Native <dialog>, so Escape, focus trapping and the top layer all come
+   from the platform instead of being rebuilt. */
+.reportbox {
+  max-width: 460px; width: calc(100% - 32px);
+  background: var(--pane); color: var(--ink); border: 1px solid var(--stamp);
+  padding: 22px 20px;
+  clip-path: polygon(0 10px, 10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+}
+.reportbox::backdrop { background: rgba(5, 5, 8, .82); backdrop-filter: blur(2px); }
+.reportbox .lab { color: var(--stamp); }
+.reportbox textarea {
+  font: inherit; width: 100%; background: var(--bg); color: var(--ink);
+  border: 1px solid var(--line); padding: 8px 9px; resize: vertical;
+}
+.reportbox textarea:focus { outline: 0; border-color: var(--ink); }
+.ghost {
+  font: inherit; font-size: 12.5px; background: none; color: var(--dim);
+  border: 1px solid var(--line); padding: 9px 14px; cursor: pointer;
+}
+.ghost:hover { color: var(--ink); border-color: var(--ink); }
+
+/* The Location link sits with the socials but is a different kind of
+   action, so it borrows .social's shape and takes the map marker's colour
+   rather than the ink used for "message them". */
+.maplink { color: var(--marker); border-color: var(--marker); }
+.maplink:hover { background: var(--marker); color: #08080a; }

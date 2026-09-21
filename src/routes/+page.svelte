@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Combobox from '$lib/components/Combobox.svelte';
 	import MapView from '$lib/components/MapView.svelte';
-	import { INSTRUMENTS, GENRES, COMMITMENTS, LABEL } from '$lib/taxonomy';
+	import { INSTRUMENTS, GENRES, COMMITMENTS, REPORT_REASONS, LABEL } from '$lib/taxonomy';
 	import { fold } from '$lib/fuzzy';
 	import { haversineKm } from '$lib/geo';
 	import { position } from '$lib/position.svelte';
@@ -79,7 +79,7 @@
 		(a.display_lat >= mapBounds.south && a.display_lat <= mapBounds.north &&
 		 a.display_lng >= mapBounds.west && a.display_lng <= mapBounds.east);
 
-	// The "Find Me" button. locateTick is the actual trigger MapView reacts
+	// The "Search Near Me" button. locateTick is the actual trigger MapView reacts
 	// to (see its own comment): a click either fires it immediately, if a
 	// position is already known, or arms wantsLocate so the effect below
 	// fires it the moment geolocation resolves instead of silently doing
@@ -87,7 +87,7 @@
 	let locateTick = $state(0);
 	let wantsLocate = $state(false);
 	let locateAttempted = $state(false);
-	function findMe() {
+	function searchNearMe() {
 		locateAttempted = true;
 		position.request();
 		if (position.coords) locateTick++;
@@ -193,11 +193,58 @@
 			.catch(() => { /* a missed view count is not worth surfacing an error for */ });
 	});
 
+	// Reporting. Anyone can post an ad pointing at someone else's Instagram,
+	// and with no accounts there is nothing to ban, so the flag plus the 14
+	// day expiry are the whole defence. The server absorbs repeat clicks
+	// from the same reporter (see report_ad()), so this stays dumb.
+	let reportDialog = $state<HTMLDialogElement>();
+	let reporting = $state<AdRow | null>(null);
+	let reportReason = $state<string>(REPORT_REASONS[0][0]);
+	let reportDetail = $state('');
+	let reportState = $state<'form' | 'sending' | 'done' | 'failed'>('form');
+
+	function openReport(a: AdRow) {
+		reporting = a;
+		reportReason = REPORT_REASONS[0][0];
+		reportDetail = '';
+		reportState = 'form';
+		reportDialog?.showModal();
+	}
+
+	async function sendReport() {
+		if (!reporting) return;
+		reportState = 'sending';
+		try {
+			const r = await fetch(`/api/ads/${reporting.public_id}/report`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ reason: reportReason, detail: reportDetail })
+			});
+			// A wrong id and an already-reported ad both answer 202: the
+			// clicker learns nothing either way, which is the point.
+			reportState = r.ok ? 'done' : 'failed';
+		} catch {
+			reportState = 'failed';
+		}
+	}
+
 	// Links are stored as whatever URL the poster pasted; only missing the
 	// scheme gets fixed up, nothing else about the link is second-guessed.
 	const toHref = (url: string) => (/^https?:\/\//i.test(url) ? url : `https://${url}`);
 
 	const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+	// Opens the pin in a maps app. Deliberately the display position, not
+	// the real one: exact lat/lng and the street address never leave the
+	// server, so this lands within ~700m of the room, same as the pin.
+	// It is "which part of town is this", not turn-by-turn to the door.
+	//
+	// One https Google Maps URL rather than branching on platform. Android
+	// and iOS both hand this to the installed Maps app through their own
+	// app-link handling, and it still works on a desktop browser, where a
+	// geo: URI would do nothing.
+	const mapsUrl = (a: AdRow) =>
+		`https://www.google.com/maps/search/?api=1&query=${a.display_lat},${a.display_lng}`;
 </script>
 
 {#snippet views(a: AdRow)}
@@ -219,29 +266,40 @@
 	</div>
 {/snippet}
 
+{#snippet flag(a: AdRow)}
+	<button type="button" class="flag" title="Report this ad"
+		aria-label="Report {a.band_name}" onclick={() => openReport(a)}>!</button>
+{/snippet}
+
 {#snippet gigCard(a: AdRow)}
-	<button class="card gigcard" class:on={selected === a.public_id} onclick={() => pick(a.public_id)}>
-		<div class="gigwhen">{formatEventAt(a.event_at ?? '')}</div>
-		<h3>{a.band_name}</h3>
-		{@render views(a)}
-		<div class="meta">{LABEL[a.kind]}{#if distanceLabel(a)} · {distanceLabel(a)}{/if}</div>
-		{@render tags(a, false)}
-	</button>
+	<div class="cardwrap">
+		<button class="card gigcard" class:on={selected === a.public_id} onclick={() => pick(a.public_id)}>
+			<div class="gigwhen">{formatEventAt(a.event_at ?? '')}</div>
+			<h3>{a.band_name}</h3>
+			{@render views(a)}
+			<div class="meta">{LABEL[a.kind]}{#if distanceLabel(a)} · {distanceLabel(a)}{/if}</div>
+			{@render tags(a, false)}
+		</button>
+		{@render flag(a)}
+	</div>
 {/snippet}
 
 {#snippet adCard(a: AdRow)}
-	<button class="card" class:on={selected === a.public_id} onclick={() => pick(a.public_id)}
-		onpointerenter={() => (hot = a.public_id)} onpointerleave={() => (hot = null)}>
-		<h3>{a.band_name}</h3>
-		<span class="lvl" class:hit={commit.includes(a.commitment)}>{a.commitment}</span>
-		{@render views(a)}
-		<div class="meta">
-			{#if distanceLabel(a)}{distanceLabel(a)} · {/if}
-			{#if a.paid}<span class="paid">Paid</span> · {/if}
-			<span class="expiry" class:soon={a.days_left <= 3}>{a.days_left}d left</span>
-		</div>
-		{@render tags(a, true)}
-	</button>
+	<div class="cardwrap">
+		<button class="card" class:on={selected === a.public_id} onclick={() => pick(a.public_id)}
+			onpointerenter={() => (hot = a.public_id)} onpointerleave={() => (hot = null)}>
+			<h3>{a.band_name}</h3>
+			<span class="lvl" class:hit={commit.includes(a.commitment)}>{a.commitment}</span>
+			{@render views(a)}
+			<div class="meta">
+				{#if distanceLabel(a)}{distanceLabel(a)} · {/if}
+				{#if a.paid}<span class="paid">Paid</span> · {/if}
+				<span class="expiry" class:soon={a.days_left <= 3}>{a.days_left}d left</span>
+			</div>
+			{@render tags(a, true)}
+		</button>
+		{@render flag(a)}
+	</div>
 {/snippet}
 
 <div class="filterbar step veil">
@@ -272,12 +330,12 @@
 	</div>
 </div>
 
-<div class="findmerow">
-	<button type="button" class="findme" onclick={findMe}>
+<div class="nearmerow">
+	<button type="button" class="nearme" onclick={searchNearMe}>
 		<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
 			<path d="M12 2C7.58 2 4 5.58 4 10c0 5.25 7 12 8 12s8-6.75 8-12c0-4.42-3.58-8-8-8Zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z" />
 		</svg>
-		Find Me
+		Search Near Me
 	</button>
 	{#if locateAttempted && position.status === 'denied'}
 		<p class="hint" style="text-align:center;margin-top:6px">Location access was denied.</p>
@@ -339,11 +397,58 @@
 					Message on {l.kind} &rarr;
 				</a>
 			{/each}
+			<a class="social maplink" href={mapsUrl(open)} target="_blank" rel="noopener noreferrer">
+				<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
+					<path d="M12 2C7.58 2 4 5.58 4 10c0 5.25 7 12 8 12s8-6.75 8-12c0-4.42-3.58-8-8-8Zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z" />
+				</svg>
+				Location &rarr;
+			</a>
 		</div>
 		<p class="hint" style="margin-top:10px">
 			Contact happens on their socials. This board only holds the ad, and it comes down
 			in {plural(open.days_left, 'day')} unless they renew.
 			The pin is accurate to about 700m, not to the door.
 		</p>
+		<button type="button" class="reportlink" onclick={() => open && openReport(open)}>
+			Report this ad
+		</button>
 	</div>
 {/if}
+
+<dialog bind:this={reportDialog} class="reportbox" onclose={() => (reporting = null)}>
+	{#if reportState === 'done'}
+		<p class="lab">Thanks</p>
+		<p class="hint">
+			Logged. Nothing happens to the ad automatically, a person reads it. If you reported
+			an impersonation, say who it is pretending to be, it is the only way to check.
+		</p>
+		<button type="button" class="go" onclick={() => reportDialog?.close()}>Close</button>
+	{:else}
+		<p class="lab">Report {reporting?.band_name ?? 'this ad'}</p>
+		<p class="hint">Nobody is told who reported what. Pick the closest reason.</p>
+
+		<div class="radiorow">
+			{#each REPORT_REASONS as [id, l]}
+				<label class="radiopill" class:on={reportReason === id}>
+					<input type="radio" name="reason" value={id} bind:group={reportReason} />
+					{l}
+				</label>
+			{/each}
+		</div>
+
+		<label for="report_detail" class="fieldname" style="margin-top:12px">Anything to add</label>
+		<textarea id="report_detail" rows="3" maxlength="600" bind:value={reportDetail}
+			placeholder="Optional. A link, a name, whatever makes it checkable."></textarea>
+
+		{#if reportState === 'failed'}
+			<p class="err">That did not go through. Check your connection and try again.</p>
+		{/if}
+
+		<div class="row" style="gap:10px;margin-top:14px">
+			<button type="button" class="go" onclick={sendReport} disabled={reportState === 'sending'}>
+				{reportState === 'sending' ? 'Sending' : 'Send report'}
+			</button>
+			<button type="button" class="ghost" onclick={() => reportDialog?.close()}>Cancel</button>
+		</div>
+	{/if}
+</dialog>

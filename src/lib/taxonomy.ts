@@ -37,6 +37,17 @@ export const SOCIAL_KINDS = [
 	['bandcamp', 'Bandcamp'], ['soundcloud', 'SoundCloud'], ['website', 'Website']
 ] as const;
 
+/** Matches the `reason_known` check constraint on the `report` table.
+ *  Fixed choices, no free-text-only reports: a reason you can count is
+ *  worth more than a paragraph nobody reads. `detail` is optional on top. */
+export const REPORT_REASONS = [
+	['spam', 'Spam, or not a real band'],
+	['impersonation', 'Pretending to be someone else'],
+	['offensive', 'Offensive or abusive'],
+	['stale', 'Already filled, or long gone'],
+	['other', 'Something else']
+] as const;
+
 export const LABEL: Record<string, string> = Object.fromEntries([
-	...INSTRUMENTS, ...GENRES, ...COMMITMENTS, ...SOCIAL_KINDS, ...AD_KINDS
+	...INSTRUMENTS, ...GENRES, ...COMMITMENTS, ...SOCIAL_KINDS, ...AD_KINDS, ...REPORT_REASONS
 ]);

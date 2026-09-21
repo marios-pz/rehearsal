@@ -119,7 +119,8 @@ SQL, not in application code, so they hold no matter what calls them.
 - **Functions** &nbsp;`ping_ad` (`greatest(expires_at, now() + 14 days)`,
   deliberately non-stacking), `close_role`, `delete_ad` (token-gated
   mutations, so the token is the only credential that exists),
-  `reap_expired_ads` (exists, unscheduled), `jitter_position` (the
+  `reap_expired_ads` (run on every boot), `report_ad` (deduped per
+  reporter, emails `ADMIN_EMAIL`), `jitter_position` (the
   700m push behind `display_lat`/`display_lng`)
 - **Migrations** &nbsp;`drizzle/*.sql`, applied in filename order by
   `scripts/bootstrap.js`, each one hashed and immutable once it has run
@@ -160,6 +161,9 @@ half-migrated database serving traffic. It:
    transaction
 5. loads reference data (instruments, genres, 194 countries), idempotently,
    so new entries arrive with the next deploy
+6. reaps expired ads, so "deleted, not archived" is true of the table and
+   not just of `ad_live`. Relaunching after months of downtime clears
+   months of dead rows before a single request is served
 
 Never seeds ads. A fresh database starts with an empty board, on purpose:
 an empty board is honest, a board of fake bands is not.
@@ -182,6 +186,7 @@ $ npm start
    database is empty, creating the schema from scratch
    applied 3 migrations: 0000_supreme_champions.sql, 0001_functions.sql, ...
    reference data: 10 instruments, 14 genres, 194 countries
+   reaped 3 expired ads
    ready
 ```
 
@@ -253,6 +258,7 @@ page on a first visit is what kills a board before its network exists.
 
 ```
 scripts/bootstrap.js        the gate described above
+scripts/seed-demo.js        five demo ads, by hand only, never on boot
 drizzle/                    migrations, applied in filename order
 src/lib/server/db/schema.ts Drizzle schema, the source of truth
 src/lib/geo.ts              haversineKm, client-safe geo math
@@ -273,9 +279,11 @@ Every endpoint and form action is documented in [API.md](API.md).
 
 - Email: verification, the renewal nudge on day 11, forwarding applications.
   `ad_needs_reminder` selects the rows; nothing sends them.
-- `reap_expired_ads()` exists but nothing calls it on a schedule. Expiry is a
-  predicate in `ad_live`, so this only reclaims rows.
-- Rate limiting: the `rate_bucket` table is there, unused. With no accounts
-  this and `report` are the only levers against abuse.
-- Impersonation: anyone can post an ad pointing at someone else's Instagram.
-  The `report` table has a reason for it; the real fix is procedural.
+- Scheduling. `scripts/send-reminders.js` still needs a cron entry for the
+  day-11 nudge. Expired ads are already reaped on every boot, and that same
+  job reaps too, so the only thing waiting on a scheduler is the email.
+- Rate limiting on posting: `rate_bucket` backs view counting and report
+  deduplication, but `/post` itself is still unlimited.
+- Moderation: reports arrive by email and nothing acts on them
+  automatically. There is no admin UI, so taking an ad down is still
+  `delete_ad(public_id, token)` or a `delete` in psql.

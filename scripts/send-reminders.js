@@ -5,7 +5,9 @@
  * less from expiry), each with its own single-use renew link, then
  * marks the row reminded so it is not sent twice.
  *
- * Not scheduled by anything in this repo, same as `reap_expired_ads()`:
+ * Also reaps expired ads, see the call at the end of main().
+ *
+ * Not scheduled by anything in this repo:
  * wire it to a cron/systemd timer/hosting-platform scheduler, once a day
  * is plenty since the window is 3 days wide. Plain JavaScript, run
  * standalone, no build step, same reasoning as bootstrap.js.
@@ -71,6 +73,14 @@ async function main() {
     }
   }
   console.log(`sent ${sent}/${rows.length}`);
+
+  // Reaped here as well as at boot, because a long-running instance never
+  // boots again and an expired row keeps a contact email, a street address
+  // and an exact rehearsal-room position alive indefinitely. This job
+  // already has to run daily, so it costs one query and no new cron entry.
+  // Split it into its own script if the schedules ever need to differ.
+  const [{ reap_expired_ads: reaped }] = await sql`select reap_expired_ads()`;
+  console.log(`reaped ${reaped} expired ad(s)`);
 }
 
 main()

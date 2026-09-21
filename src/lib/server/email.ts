@@ -55,3 +55,39 @@ export async function sendRenewalReminderEmail(
 			`This link works once and expires in 48 hours. If you'd rather let it expire, no action is needed.`
 	);
 }
+
+/**
+ * The only email that goes to the operator rather than to a band. Reports
+ * are worthless if nobody sees them, and with no admin UI yet the inbox is
+ * the queue.
+ *
+ * Returns false instead of throwing when ADMIN_EMAIL is unset, because the
+ * report is already safely in the database by the time this runs: losing
+ * the notification is annoying, losing the report because the notification
+ * failed would be worse. The caller logs it either way.
+ */
+export async function sendReportEmail(opts: {
+	publicId: string;
+	bandName: string;
+	reason: string;
+	detail: string;
+	board: string;
+}): Promise<boolean> {
+	const to = env.ADMIN_EMAIL;
+	if (!to) return false;
+
+	await send(
+		to,
+		`Report: ${opts.bandName} (${opts.reason})`,
+		`${opts.bandName} was reported.\n\n` +
+			`Reason   ${opts.reason}\n` +
+			`Ad code  ${opts.publicId}\n` +
+			`Board    ${opts.board}\n\n` +
+			(opts.detail ? `What they wrote:\n${opts.detail}\n\n` : '') +
+			`Take it down with:\n` +
+			`  select delete_ad('${opts.publicId}', '<edit token>');\n` +
+			`or straight from psql:\n` +
+			`  delete from ad where public_id = '${opts.publicId}';`
+	);
+	return true;
+}

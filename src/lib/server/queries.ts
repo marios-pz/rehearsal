@@ -74,3 +74,14 @@ export const verifyAd = async (publicId: string, verifyToken: string) =>
  *  comment for why). */
 export const renewViaNudge = async (publicId: string, nudgeToken: string) =>
 	toDate(await scalar<string>(sql`select renew_via_nudge(${publicId}, ${normalize(nudgeToken)}) as v`));
+
+/** A flag click. Returns the band name when the report was newly recorded
+ *  (the caller emails the admin on that, and only that), an empty string
+ *  when this reporter already flagged the ad inside the window, and null
+ *  for an id that is not live. See 0010_report_ad.sql. */
+export const reportAd = (
+	publicId: string, reason: string, detail: string, reporterHash: Buffer
+) =>
+	scalar<string>(sql`
+		select report_ad(${publicId}, ${reason}, ${detail}, ${reporterHash.toString('hex')}) as v
+	`);
