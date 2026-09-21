@@ -254,16 +254,15 @@
 	   without it, panning inside a clip-path container is a common source
 	   of mobile/WebView jank. */
 	.wrap { position: relative; border: 1px solid var(--line); background: var(--sea); overflow: hidden;
-	        clip-path: polygon(0 10px, 10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
-	        transform: translateZ(0); }
+	        box-shadow: inset 0 0 0 1px rgba(51, 80, 42, .4); transform: translateZ(0); }
 	.map { width: 100%; height: 400px; background: var(--sea); }
 	.map.pick { height: 300px; cursor: crosshair; }
 	@media (max-width: 820px) { .map { height: 280px; } }
 
 	.zoom { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 6px; z-index: 400; }
-	.zoom button { font: inherit; width: 34px; height: 34px; background: #08080acc; color: var(--ink);
+	.zoom button { font: inherit; width: 34px; height: 34px; background: #050805cc; color: var(--ink);
 	               border: 1px solid var(--line); cursor: pointer; font-size: 15px; line-height: 1; padding: 0; }
-	.zoom button:hover { border-color: var(--ink); }
+	.zoom button:hover { border-color: var(--moss); color: var(--marker); }
 	.zoom .rs { font-size: 9px; }
 	@media (max-width: 820px) {
 		.zoom { gap: 8px; }
@@ -271,7 +270,7 @@
 		.zoom .rs { font-size: 9.5px; }
 	}
 	.coords { position: absolute; left: 8px; bottom: 8px; font-size: 10.5px; letter-spacing: .1em;
-	          color: var(--dim); background: #08080acc; padding: 4px 7px; pointer-events: none; z-index: 400; }
+	          color: var(--dim); background: #050805cc; padding: 4px 7px; pointer-events: none; z-index: 400; }
 	.coords.zoomgate { color: var(--marker); text-transform: uppercase; }
 
 	/* Leaflet renders these into the map's own panes, outside Svelte's
@@ -284,18 +283,21 @@
 	   between one filtered GPU layer and a dozen+ redrawn on every frame of
 	   a pan, and the latter is a well-known source of mobile drag jitter. */
 	:global(.leaflet-tile-pane) {
-		filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9);
+		/* invert+rotate turns the light tiles dark; the sepia/hue-rotate pair
+		   after it drags the whole map into the same moss the rest of the UI
+		   sits in, so it stops reading as a grey widget bolted onto a green page. */
+		filter: invert(1) hue-rotate(180deg) brightness(0.82) contrast(0.86) sepia(0.5) hue-rotate(58deg) saturate(0.7);
 		will-change: transform;
 	}
 	:global(.leaflet-control-attribution) {
-		background: #08080a99; color: var(--dim); font-size: 9.5px;
+		background: #05080599; color: var(--dim); font-size: 9.5px;
 	}
 	:global(.leaflet-control-attribution a) { color: var(--dim); }
 
 	:global(.lf-pin-wrap), :global(.lf-dot-wrap) { pointer-events: none; }
 	:global(.lf-pin) {
 		position: relative; height: 15px; cursor: pointer; pointer-events: auto;
-		background: #0b0b0fee; border: 1px solid var(--ink); display: flex; align-items: center; justify-content: center;
+		background: #070d08ee; border: 1px solid var(--moss); display: flex; align-items: center; justify-content: center;
 	}
 	:global(.lf-pin-label) {
 		font-family: var(--mono); font-size: 8.5px; font-weight: 700; color: var(--ink); letter-spacing: .04em;
@@ -305,11 +307,11 @@
 	}
 	:global(.lf-pin-dot) {
 		position: absolute; left: 50%; top: calc(100% + 5px); width: 3.8px; height: 3.8px; margin-left: -1.9px;
-		border-radius: 50%; background: var(--ink); border: .8px solid #08080a;
+		border-radius: 50%; background: var(--ink); border: .8px solid #050805;
 	}
-	:global(.lf-pin.hot) { background: #2a2a34; }
+	:global(.lf-pin.hot) { background: #16221a; }
 	:global(.lf-pin.on) { background: var(--marker); border-color: var(--marker); }
-	:global(.lf-pin.on .lf-pin-label) { color: #08080a; }
+	:global(.lf-pin.on .lf-pin-label) { color: #060806; }
 	:global(.lf-pin.on .lf-pin-stem), :global(.lf-pin.on .lf-pin-dot) { background: var(--marker); }
 	:global(.lf-pin.paid) { border-color: var(--stamp); }
 

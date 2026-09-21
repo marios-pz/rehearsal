@@ -106,28 +106,27 @@
 		background: var(--pane); border: 1px solid var(--line); padding: 7px 9px; cursor: text;
 		transition: border-color .2s var(--ease), box-shadow .2s var(--ease);
 	}
-	.field.focus { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+	.field.focus { border-color: var(--moss); box-shadow: inset 0 0 22px rgba(127, 166, 44, .09); }
 	.field input {
 		font: inherit; flex: 1; min-width: 110px; background: transparent;
 		color: var(--ink); border: 0; outline: 0; padding: 4px 2px;
 	}
 	.field input::placeholder { color: var(--dim); }
 	.token {
-		display: inline-flex; align-items: center; gap: 6px; background: var(--marker);
-		color: #08080a; font-size: 11.5px; font-weight: 700; letter-spacing: .05em;
-		text-transform: uppercase; padding: 4px 5px 4px 8px; animation: pop .22s var(--ease);
-		transform: rotate(-1.6deg);
+		display: inline-flex; align-items: center; gap: 6px; background: var(--velvet);
+		border: 1px solid var(--moss); color: var(--marker); font-size: 11.5px; font-weight: 700;
+		letter-spacing: .1em; text-transform: uppercase; padding: 3px 5px 3px 8px;
+		animation: pop .26s var(--ease);
 	}
-	.token:nth-child(even) { transform: rotate(1.4deg); }
-	@keyframes pop { from { transform: scale(.8); opacity: 0; } }
+	@keyframes pop { from { opacity: 0; } }
 	.token button {
-		font: inherit; background: none; border: 0; color: #08080a; cursor: pointer;
+		font: inherit; background: none; border: 0; color: var(--marker); cursor: pointer;
 		font-size: 13px; line-height: 1; padding: 6px 4px; margin: -6px -4px -6px 2px; opacity: .65;
 	}
 	.token button:hover { opacity: 1; }
 	.menu {
 		position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 4px);
-		background: var(--pane); border: 1px solid var(--ink); max-height: 250px;
+		background: var(--pane); border: 1px solid var(--moss); max-height: 250px;
 		overflow: auto; animation: drop .18s var(--ease);
 	}
 	@keyframes drop { from { opacity: 0; transform: translateY(-6px); } }
@@ -140,7 +139,7 @@
 		text-align: left; background: transparent; border: 0; color: var(--ink);
 		padding: 8px 11px; cursor: pointer; font-size: 13px;
 	}
-	.opt:hover, .opt.cur { background: #22222a; }
+	.opt:hover, .opt.cur { background: var(--velvet); color: var(--marker); }
 	.opt .rt {
 		margin-left: auto; font-size: 10px; letter-spacing: .07em;
 		text-transform: uppercase; color: var(--dim); white-space: nowrap;
