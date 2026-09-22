@@ -4,9 +4,9 @@
 
 	<div class="prose">
 		<p>
-			Rehearsals exists so a band's "musicians wanted" post outlives a 24 hour story and can still
-			be found, months later, by the right person in the right city. Posting an ad is free, browsing
-			is free, and there is no account and no fee to add either.
+			Probes exists so a band's "musicians wanted" post outlives a 24 hour story and can still be
+			found, months later, by the right person in the right city. Posting an ad is free, browsing is
+			free, and there is no account and no fee to add either.
 		</p>
 		<p>
 			Running it still has real costs: hosting, the database, the emails that verify an ad and

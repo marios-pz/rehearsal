@@ -12,8 +12,8 @@
  */
 
 export const DRAFT = {
-	filters: 'rehearsal:filters',
-	post: 'rehearsal:post-draft',
+	filters: 'probes:filters',
+	post: 'probes:post-draft',
 } as const;
 
 export function readDraft<T>(key: string): Partial<T> | null {

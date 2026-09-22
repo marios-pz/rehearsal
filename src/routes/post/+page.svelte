@@ -194,8 +194,6 @@
 	</div>
 {:else}
 	<form class="form postform step veil" method="POST" use:enhance={submit}>
-		<p class="hint">A star means we cannot post the ad without it.</p>
-
 		{#if stepIx === 0}
 			<fieldset class="sect">
 				<legend class="secthead">I am looking for</legend>
@@ -218,6 +216,7 @@
 
 			<fieldset class="sect">
 				<legend class="secthead">Select your instruments<span class="req">*</span></legend>
+				<p class="hint starnote">A star means we cannot post the ad without it.</p>
 
 				<div class="cats">
 					{#each INSTRUMENT_CATEGORIES as [id, l, ids]}
@@ -400,6 +399,13 @@
 		{/each}
 
 		{#if form?.error}<p class="err">{form.error}</p>{/if}
+
+		<!-- Consent without a checkbox: the terms are one tap away and the
+		     act of sending is the agreement, which is all a free board with
+		     no account needs. -->
+		{#if stepIx === LAST}
+			<p class="hint">Sending means you agree to the <a href="/terms">terms</a>.</p>
+		{/if}
 
 		<!-- Back on the left, forward on the right, nothing in between but
 		     what the panel is still short of. -->

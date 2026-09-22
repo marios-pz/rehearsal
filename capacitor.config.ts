@@ -19,8 +19,8 @@ import type { CapacitorConfig } from '@capacitor/cli';
 // feeding the real build output into the native copy step, not to disable
 // a real production performance feature to satisfy an unrelated toolchain.
 const config: CapacitorConfig = {
-	appId: 'com.rehearsals.app',
-	appName: 'Rehearsals',
+	appId: 'gr.probes.app',
+	appName: 'Probes',
 	webDir: 'capacitor-www',
 	server: {
 		url: 'http://192.168.1.45:3000',

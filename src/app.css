@@ -368,6 +368,24 @@ button.go[disabled] { opacity: .3; cursor: not-allowed; }
 .prose { margin: 16px 0 4px; }
 .prose p { font-size: 13.5px; line-height: 1.75; color: var(--ink); margin: 0 0 14px; }
 .prose p:last-child { margin-bottom: 0; }
+/* Headings inside a long read: the same stamped label as a panel title,
+   just with air above it, so the page has landmarks without drawn rules. */
+.prose h2 { font-size: 15px; margin: 30px 0 12px; }
+.prose strong { color: var(--marker); font-weight: 400; }
+/* An aside inside a heading: said under the breath, so it drops the
+   display face, the caps and the tracking the heading is wearing. */
+.prose h2 .aside { font-family: var(--mono); font-size: 10.5px; font-weight: 400;
+                   letter-spacing: .04em; text-transform: none; color: var(--dim); }
+
+/* The retention list. A table would be honest and unreadable on a phone,
+   so each entry is a stamped term with its answer under it, and the part
+   people actually came for (how long it is kept) is the only thing lit. */
+.keeps { margin: 0 0 14px; max-width: 62ch; }
+.keeps dt { font-family: var(--disp); font-weight: 600; font-size: 11.5px;
+            letter-spacing: .14em; text-transform: uppercase; color: var(--ink);
+            margin: 18px 0 5px; }
+.keeps dd { margin: 0; font-size: 13.5px; line-height: 1.7; color: var(--dim); }
+.keeps dd b { color: var(--marker); font-weight: 400; }
 @media (max-width: 560px) { .form { padding: 20px 16px 24px; } }
 .tokenbox { border: 0; padding: 20px 18px; background: var(--velvet);
             box-shadow: inset 0 1px 0 var(--moss), 0 14px 36px rgba(0, 0, 0, .5); }
@@ -411,10 +429,8 @@ button.go[disabled] { opacity: .3; cursor: not-allowed; }
 
 /* ---- Form sections --------------------------------------------------- */
 .sect { border: 0; padding: 0; margin: 0 0 34px; min-width: 0; }
-/* No page title on the form: the nav already says POST, and a heading
-   with a rule under it was one more line between you and the first
-   question. */
-.form.postform > .hint:first-child { margin-bottom: 26px; }
+/* The star legend sits where the first starred field is, not at the top. */
+.starnote { font-size: 10.5px; margin: -4px 0 14px; }
 .secthead {
 	display: flex; align-items: baseline; gap: 10px; padding: 0 0 10px; width: 100%;
 	font-family: var(--disp); font-weight: 600; font-size: 15px;
@@ -443,7 +459,7 @@ button.go[disabled] { opacity: .3; cursor: not-allowed; }
            color: var(--dim); margin: 0; }
 /* The floating coffee link would sit on top of that bar, and a form in
    progress is the one moment not to ask for money. */
-body:has(.submitbar) .coffee-fab { display: none; }
+body:has(.submitbar) .coffee-fab, body:has(.submitbar) .by-fab { display: none; }
 @media (max-width: 560px) {
 	.submitbar { margin: 8px -16px -24px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
 	.submitbar .go { flex: 0 1 auto; justify-content: center; }
@@ -472,6 +488,23 @@ body:has(.submitbar) .coffee-fab { display: none; }
 	transition: color .28s var(--ease), background .28s var(--ease);
 }
 .coffee-fab:hover { background: rgba(127, 166, 44, .12); color: var(--marker); }
+
+/* The byline. Same pill as the coffee link, mirrored to the other corner
+   and a shade quieter: it says who made this, it is not asking for
+   anything. Hidden on a phone, where two corners of chrome over a map is
+   one corner too many. */
+.by-fab {
+	position: fixed; bottom: 18px; left: 18px; z-index: 40;
+	display: inline-flex; align-items: center; gap: 7px;
+	font-size: 10px; letter-spacing: .14em; text-transform: lowercase;
+	background: var(--velvet); color: var(--dim); text-decoration: none;
+	border: 0; box-shadow: inset 0 1px 0 var(--moss), 0 10px 28px rgba(0, 0, 0, .6);
+	padding: 10px 14px;
+	transition: color .28s var(--ease), background .28s var(--ease);
+}
+.by-fab:hover { background: rgba(127, 166, 44, .12); color: var(--marker); }
+.by-fab svg { opacity: .8; }
+@media (max-width: 720px) { .by-fab { display: none; } }
 @media (max-width: 560px) {
 	.coffee-fab { padding: 9px 12px; font-size: 9.5px;
 	              bottom: calc(10px + env(safe-area-inset-bottom)); right: 10px; }
