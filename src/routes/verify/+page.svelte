@@ -6,11 +6,11 @@
 
 <div class="form step veil">
 	{#if form?.verified}
-		<div class="tokenbox" style="border-color:var(--marker)">
-			<h2 style="color:var(--marker)">Confirmed</h2>
+		<div class="tokenbox">
+			<h2>Confirmed</h2>
 			<p style="font-size:13px;margin:0">
-				{form.bandName} is live on the board. Check your email for the ad code and token,
-				it is shown there exactly once and cannot be recovered.
+				{form.bandName} is live on the board. Check your email for the ad code and token, it is shown
+				there exactly once and cannot be recovered.
 			</p>
 		</div>
 	{:else if form?.error}
@@ -19,8 +19,8 @@
 	{:else if data.id && data.token}
 		<p class="lab">Verify your ad</p>
 		<p class="hint">
-			One click and it goes live. This also mints your edit token and emails it to you,
-			it is not shown here or anywhere else.
+			One click and it goes live. This also mints your edit token and emails it to you, it is not
+			shown here or anywhere else.
 		</p>
 		<form method="POST" use:enhance>
 			<input type="hidden" name="id" value={data.id} />

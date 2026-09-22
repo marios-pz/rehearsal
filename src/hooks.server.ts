@@ -5,8 +5,13 @@ import type { HandleServerError } from '@sveltejs/kit';
  *  them. Checked by code first (stable across locales), message as a
  *  fallback for anything that slips through without one. */
 const DB_DOWN_CODES = new Set([
-	'ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT',
-	'CONNECT_TIMEOUT', 'CONNECTION_CLOSED', 'CONNECTION_ENDED', 'CONNECTION_DESTROYED'
+	'ECONNREFUSED',
+	'ENOTFOUND',
+	'ETIMEDOUT',
+	'CONNECT_TIMEOUT',
+	'CONNECTION_CLOSED',
+	'CONNECTION_ENDED',
+	'CONNECTION_DESTROYED',
 ]);
 
 /** Drizzle wraps the real postgres.js/Node error in a DrizzleQueryError, so
@@ -17,7 +22,8 @@ function isDbDown(err: unknown, depth = 0): boolean {
 	const code = (err as { code?: string }).code;
 	if (code && DB_DOWN_CODES.has(code)) return true;
 	const message = String((err as { message?: string }).message ?? '');
-	if (/ECONNREFUSED|ENOTFOUND|ETIMEDOUT|CONNECT_TIMEOUT|connection.*closed/i.test(message)) return true;
+	if (/ECONNREFUSED|ENOTFOUND|ETIMEDOUT|CONNECT_TIMEOUT|connection.*closed/i.test(message))
+		return true;
 	return isDbDown((err as { cause?: unknown }).cause, depth + 1);
 }
 
@@ -31,5 +37,8 @@ export const handleError: HandleServerError = ({ error, status }) => {
 		return { message: 'The database is down. We are working on it.', dbDown: true as const };
 	}
 	console.error(error);
-	return { message: status === 404 ? 'Not found.' : 'Something went wrong.', dbDown: false as const };
+	return {
+		message: status === 404 ? 'Not found.' : 'Something went wrong.',
+		dbDown: false as const,
+	};
 };

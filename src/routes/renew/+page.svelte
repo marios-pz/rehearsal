@@ -30,11 +30,11 @@
 	<button class="go" type="submit" disabled={!id || !token}>Ping</button>
 
 	{#if form?.renewed}
-		<div class="tokenbox step veil" style="border-color:var(--marker);margin-top:20px">
-			<h2 style="color:var(--marker)">Alive until {form.until}</h2>
+		<div class="tokenbox step veil" style="margin-top:20px">
+			<h2>Alive until {form.until}</h2>
 			<p style="font-size:13px;margin:0">
-				Ping it again any time before then. The clock restarts from today rather than stacking,
-				so an ad cannot be pushed out half a year on the day it is posted.
+				Ping it again any time before then. The clock restarts from today rather than stacking, so
+				an ad cannot be pushed out half a year on the day it is posted.
 			</p>
 		</div>
 	{:else if form?.error}

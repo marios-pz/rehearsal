@@ -46,7 +46,7 @@ export const liveAds = (countryCode: string) =>
 /** Drives the ad counts beside each country in the picker. */
 export async function adCountsByCountry(): Promise<Record<string, number>> {
 	const counts = await rows<{ country_code: string; n: number }>(
-		sql`select country_code, count(*)::int as n from ad_live group by country_code`
+		sql`select country_code, count(*)::int as n from ad_live group by country_code`,
 	);
 	return Object.fromEntries(counts.map((c) => [c.country_code, c.n]));
 }
@@ -67,21 +67,22 @@ export const pingAd = async (publicId: string, editToken: string) =>
  *  token itself is minted separately, by the caller, only once this
  *  returns true. */
 export const verifyAd = async (publicId: string, verifyToken: string) =>
-	(await scalar<boolean>(sql`select verify_ad(${publicId}, ${normalize(verifyToken)}) as v`)) === true;
+	(await scalar<boolean>(sql`select verify_ad(${publicId}, ${normalize(verifyToken)}) as v`)) ===
+	true;
 
 /** The day-11 reminder email's "renew now" link: a single-use token minted
  *  just for that email, never the real edit token (see the migration
  *  comment for why). */
 export const renewViaNudge = async (publicId: string, nudgeToken: string) =>
-	toDate(await scalar<string>(sql`select renew_via_nudge(${publicId}, ${normalize(nudgeToken)}) as v`));
+	toDate(
+		await scalar<string>(sql`select renew_via_nudge(${publicId}, ${normalize(nudgeToken)}) as v`),
+	);
 
 /** A flag click. Returns the band name when the report was newly recorded
  *  (the caller emails the admin on that, and only that), an empty string
  *  when this reporter already flagged the ad inside the window, and null
  *  for an id that is not live. See 0010_report_ad.sql. */
-export const reportAd = (
-	publicId: string, reason: string, detail: string, reporterHash: Buffer
-) =>
+export const reportAd = (publicId: string, reason: string, detail: string, reporterHash: Buffer) =>
 	scalar<string>(sql`
 		select report_ad(${publicId}, ${reason}, ${detail}, ${reporterHash.toString('hex')}) as v
 	`);

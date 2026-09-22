@@ -4,7 +4,7 @@
 ARG NODE_VERSION=24-alpine
 
 # ---- build: full deps, compile the SvelteKit app -------------------------
-# `npm run build` must not need a database (see CLAUDE.md); it only runs vite.
+# `npm run build` must not need a database; it only runs vite.
 FROM node:${NODE_VERSION} AS build
 WORKDIR /app
 
@@ -12,6 +12,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
+RUN npm test
 RUN npm run build
 
 # ---- prod-deps: install only what runs in production ----------------------
@@ -29,16 +30,20 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000
 
-# adapter-node output, prod-only node_modules, and everything
-# `npm start` needs (db bootstrap gate + immutable migrations). bootstrap.js
-# reads src/lib/data/*.json (countries, geo) directly at runtime, so that
-# directory has to ship too, not just the compiled build.
+# adapter-node output, prod-only node_modules, and everything `npm start`
+# needs. That is the unit tests, the db bootstrap gate and the immutable
+# migrations, in that order: prestart runs the tests, bootstrap migrates,
+# then the server comes up. bootstrap.js reads src/lib/data/*.json
+# (countries, geo) at runtime, and the tests read the rest of src/lib, so
+# the sources ship as well as the build.
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/build ./build
 COPY package.json ./
 COPY scripts ./scripts
 COPY drizzle ./drizzle
-COPY src/lib/data ./src/lib/data
+COPY test ./test
+COPY src/lib ./src/lib
+COPY static/instruments ./static/instruments
 
 USER node
 EXPOSE 3000

@@ -15,14 +15,14 @@ services:
       # (pg_ctlcluster-style, versioned subdirs), not .../data as in <18.
       - db-data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d rehearsal"]
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d rehearsal']
       interval: 5s
       timeout: 5s
       retries: 10
     ports:
       # So a locally-run `vite dev` (outside Docker) can reach it at the
       # DATABASE_URL in .env. Loopback-only: not reachable from the LAN.
-      - "127.0.0.1:5432:5432"
+      - '127.0.0.1:5432:5432'
 
   app:
     build: .
@@ -36,7 +36,7 @@ services:
       ORIGIN: ${ORIGIN:-http://localhost:3000}
       PORT: 3000
     ports:
-      - "3000:3000"
+      - '3000:3000'
 
 volumes:
   db-data:

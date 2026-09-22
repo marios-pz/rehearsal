@@ -29,7 +29,7 @@ export function getDb(): PostgresJsDatabase<typeof schema> {
 
 /** Convenience proxy, so callers can write `db.execute(...)` as usual. */
 export const db = new Proxy({} as PostgresJsDatabase<typeof schema>, {
-	get: (_, prop) => Reflect.get(getDb() as object, prop, getDb())
+	get: (_, prop) => Reflect.get(getDb() as object, prop, getDb()),
 });
 
 export { schema };

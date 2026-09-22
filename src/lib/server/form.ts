@@ -11,9 +11,11 @@ export const text = (f: FormData, name: string) => String(f.get(name) ?? '').tri
 
 /** A repeated field, narrowed to values the server actually recognises.
  *  Anything else a client invents is dropped silently rather than rejected:
- *  these are checkbox-style inputs, and there is no useful error to show. */
+ *  these are checkbox-style inputs, and there is no useful error to show.
+ *  Deduplicated: the post form can offer the same slug in two pickers, and
+ *  one instrument twice is one instrument. */
 export const picks = (f: FormData, name: string, allowed: ReadonlySet<string>) =>
-	f.getAll(name).map(String).filter((v) => allowed.has(v));
+	[...new Set(f.getAll(name).map(String))].filter((v) => allowed.has(v));
 
 /** The slug half of a taxonomy table, as a lookup set for `picks` and for
  *  validating single-value fields. */

@@ -9,16 +9,16 @@ both exist because the page needs data without a navigation.
 So this file has three parts: the JSON endpoints, the form actions, and the
 SQL functions underneath both, which are where the rules actually live.
 
-| Surface | Route | Method |
-| --- | --- | --- |
-| [Live ads in a country](#get-apiads) | `/api/ads` | `GET` |
-| [Record an ad view](#post-apiadsidview) | `/api/ads/{id}/view` | `POST` |
-| [Report an ad](#post-apiadsidreport) | `/api/ads/{id}/report` | `POST` |
-| [Legacy results redirect](#get-results) | `/results` | `GET` |
-| [Create an ad](#post-post) | `/post` | `POST` (default action) |
-| [Confirm an email](#post-verify) | `/verify` | `POST` (default action) |
-| [Renew with a token](#post-renewping) | `/renew?/ping` | `POST` |
-| [Renew from an email link](#post-renewnudge) | `/renew?/nudge` | `POST` |
+| Surface                                      | Route                  | Method                  |
+| -------------------------------------------- | ---------------------- | ----------------------- |
+| [Live ads in a country](#get-apiads)         | `/api/ads`             | `GET`                   |
+| [Record an ad view](#post-apiadsidview)      | `/api/ads/{id}/view`   | `POST`                  |
+| [Report an ad](#post-apiadsidreport)         | `/api/ads/{id}/report` | `POST`                  |
+| [Legacy results redirect](#get-results)      | `/results`             | `GET`                   |
+| [Create an ad](#post-post)                   | `/post`                | `POST` (default action) |
+| [Confirm an email](#post-verify)             | `/verify`              | `POST` (default action) |
+| [Renew with a token](#post-renewping)        | `/renew?/ping`         | `POST`                  |
+| [Renew from an email link](#post-renewnudge) | `/renew?/nudge`        | `POST`                  |
 
 There is no authentication header, no session and no account anywhere in
 this list. An ad belongs to whoever holds its edit token, and the token is
@@ -35,9 +35,9 @@ browser (see [Ranking](#ranking-is-not-the-servers-job)).
 
 **Query parameters**
 
-| Name | Required | Description |
-| --- | --- | --- |
-| `c` | yes | ISO 3166-1 alpha-2 country code, case-insensitive. |
+| Name | Required | Description                                        |
+| ---- | -------- | -------------------------------------------------- |
+| `c`  | yes      | ISO 3166-1 alpha-2 country code, case-insensitive. |
 
 **Responses**
 
@@ -45,23 +45,23 @@ browser (see [Ranking](#ranking-is-not-the-servers-job)).
 
 ```jsonc
 [
-  {
-    "public_id": "k3f9qa",          // the ad's public handle, 6 chars
-    "band_name": "Rust Verdict",
-    "blurb": "Rehearsal twice a week, gigs by spring.",
-    "country_code": "GR",
-    "display_lat": 37.9812,         // jittered, NOT the real position
-    "display_lng": 23.7301,
-    "commitment": "serious",        // casual | serious | professional
-    "kind": "member",               // member | gig | rehearsal
-    "event_at": null,               // ISO instant; null when kind is "member"
-    "paid": false,
-    "days_left": 11,
-    "view_count": 42,
-    "needs": ["drums", "bass"],     // open roles only, filled ones drop out
-    "genres": ["doom-stoner", "prog"],
-    "links": [{ "kind": "instagram", "handle": "https://instagram.com/..." }]
-  }
+	{
+		"public_id": "k3f9qa", // the ad's public handle, 6 chars
+		"band_name": "Rust Verdict",
+		"blurb": "Rehearsal twice a week, gigs by spring.",
+		"country_code": "GR",
+		"display_lat": 37.9812, // jittered, NOT the real position
+		"display_lng": 23.7301,
+		"commitment": "serious", // casual | serious | professional
+		"kind": "member", // member | gig | rehearsal
+		"event_at": null, // ISO instant; null when kind is "member"
+		"paid": false,
+		"days_left": 11,
+		"view_count": 42,
+		"needs": ["drums", "bass"], // open roles only, filled ones drop out
+		"genres": ["doom-stoner", "prog"],
+		"links": [{ "kind": "instagram", "handle": "https://instagram.com/..." }],
+	},
 ]
 ```
 
@@ -83,8 +83,8 @@ once per ad per page load; the real deduplication is server-side.
 
 **Path parameters**
 
-| Name | Description |
-| --- | --- |
+| Name | Description           |
+| ---- | --------------------- |
 | `id` | The ad's `public_id`. |
 
 No body. The viewer is identified by `sha256(IP_SALT + ':' + client IP)`,
@@ -110,16 +110,16 @@ for the person who just found the ad, which is everybody.
 
 **Path parameters**
 
-| Name | Description |
-| --- | --- |
+| Name | Description           |
+| ---- | --------------------- |
 | `id` | The ad's `public_id`. |
 
 **Body** (`application/json`)
 
-| Field | Required | Notes |
-| --- | --- | --- |
-| `reason` | yes | One of `spam`, `impersonation`, `offensive`, `stale`, `other`. Must match the `reason_known` check on the table; the list lives in `src/lib/taxonomy.ts` as `REPORT_REASONS`. |
-| `detail` | no | Free text, trimmed and truncated to 600 characters. |
+| Field    | Required | Notes                                                                                                                                                                         |
+| -------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reason` | yes      | One of `spam`, `impersonation`, `offensive`, `stale`, `other`. Must match the `reason_known` check on the table; the list lives in `src/lib/taxonomy.ts` as `REPORT_REASONS`. |
+| `detail` | no       | Free text, trimmed and truncated to 600 characters.                                                                                                                           |
 
 **Responses**
 
@@ -171,22 +171,22 @@ on the board until that link is clicked.
 
 **Fields**
 
-| Field | Required | Notes |
-| --- | --- | --- |
-| `band_name` | yes | 1 to 80 characters after trimming. |
-| `blurb` | no | Truncated to 600 characters. |
-| `kind` | yes | `member`, `gig` or `rehearsal`. Defaults to `member`. |
-| `event_at` | if dated | Full ISO instant. Required when `kind` is not `member`, must be in the future. The browser converts its `datetime-local` input using the poster's own timezone, because parsing a bare `2026-09-10T19:00` on the server would silently use the server's. |
-| `country` | yes | ISO alpha-2. |
-| `pin_lat`, `pin_lng` | yes | Where the rehearsal room actually is. Stored exactly, served jittered. |
-| `address` | no | Street address. Never sent to a browser. |
-| `instrument` | yes | Repeated field, one per open role. At least one. Unknown slugs are dropped silently. |
-| `genre` | no | Repeated field. Unknown slugs dropped. |
-| `commitment` | yes | `casual`, `serious` or `professional`. |
-| `paid` | no | `on` when checked, absent otherwise. |
-| `social_kind` | yes | Repeated. Index-aligned with `social_url`. At least one pair must survive cleaning. |
-| `social_url` | yes | Repeated, index-aligned with `social_kind`. |
-| `email` | yes | Never public. Used for the confirm link, the token email and the day-11 nudge. |
+| Field                | Required | Notes                                                                                                                                                                                                                                                    |
+| -------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `band_name`          | yes      | 1 to 80 characters after trimming.                                                                                                                                                                                                                       |
+| `blurb`              | no       | Truncated to 600 characters.                                                                                                                                                                                                                             |
+| `kind`               | yes      | `member`, `gig` or `rehearsal`. Defaults to `member`.                                                                                                                                                                                                    |
+| `event_at`           | if dated | Full ISO instant. Required when `kind` is not `member`, must be in the future. The browser converts its `datetime-local` input using the poster's own timezone, because parsing a bare `2026-09-10T19:00` on the server would silently use the server's. |
+| `country`            | yes      | ISO alpha-2.                                                                                                                                                                                                                                             |
+| `pin_lat`, `pin_lng` | yes      | Where the rehearsal room actually is. Stored exactly, served jittered.                                                                                                                                                                                   |
+| `address`            | no       | Street address. Never sent to a browser.                                                                                                                                                                                                                 |
+| `instrument`         | yes      | Repeated field, one per open role. At least one. Unknown slugs are dropped silently.                                                                                                                                                                     |
+| `genre`              | no       | Repeated field. Unknown slugs dropped.                                                                                                                                                                                                                   |
+| `commitment`         | yes      | `casual`, `serious` or `professional`.                                                                                                                                                                                                                   |
+| `paid`               | no       | `on` when checked, absent otherwise.                                                                                                                                                                                                                     |
+| `social_kind`        | yes      | Repeated. Index-aligned with `social_url`. At least one pair must survive cleaning.                                                                                                                                                                      |
+| `social_url`         | yes      | Repeated, index-aligned with `social_kind`.                                                                                                                                                                                                              |
+| `email`              | yes      | Never public. Used for the confirm link, the token email and the day-11 nudge.                                                                                                                                                                           |
 
 Valid slugs for `instrument`, `genre`, `commitment`, `kind` and
 `social_kind` come from `src/lib/taxonomy.ts`, which is the same list the
@@ -210,10 +210,10 @@ they cannot confirm.
 The confirm-link click. This is what publishes the ad and mints the edit
 token.
 
-| Field | Notes |
-| --- | --- |
-| `id` | The ad's `public_id`, from the emailed link. |
-| `token` | The verify token, from the same link. |
+| Field   | Notes                                        |
+| ------- | -------------------------------------------- |
+| `id`    | The ad's `public_id`, from the emailed link. |
+| `token` | The verify token, from the same link.        |
 
 A real `POST` behind a button, never verification on the `GET` that loads
 the page: mail security scanners routinely pre-visit links to check them,
@@ -237,10 +237,10 @@ is stated plainly because that person now has a live ad they cannot edit.
 
 Extends an ad by 14 days using the token the band saved.
 
-| Field | Notes |
-| --- | --- |
-| `public_id` | The ad code. |
-| `token` | The edit token. Trimmed and upper-cased before hashing. |
+| Field       | Notes                                                   |
+| ----------- | ------------------------------------------------------- |
+| `public_id` | The ad code.                                            |
+| `token`     | The edit token. Trimmed and upper-cased before hashing. |
 
 **Responses**
 
@@ -261,9 +261,9 @@ pushed out half a year by pinging it repeatedly on the day it was posted.
 
 The one-click link in the day-11 reminder email.
 
-| Field | Notes |
-| --- | --- |
-| `id` | The ad's `public_id`. |
+| Field   | Notes                                       |
+| ------- | ------------------------------------------- |
+| `id`    | The ad's `public_id`.                       |
 | `nudge` | The single-use nudge token, valid 48 hours. |
 
 Same success and failure shapes as `?/ping`.
@@ -282,24 +282,24 @@ calls them live in Postgres, so they hold for `psql` too.
 
 ### Views
 
-| View | What it is |
-| --- | --- |
-| `ad_live` | Every ad that is `published` and not past `expires_at`. Expiry is a **predicate, not a cron job**, so an expired ad cannot be served even in the window before `reap_expired_ads()` deletes the row. |
-| `ad_needs_reminder` | Published ads 3 days or less from expiry that have not been reminded yet. Read by `scripts/send-reminders.js`. |
+| View                | What it is                                                                                                                                                                                           |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ad_live`           | Every ad that is `published` and not past `expires_at`. Expiry is a **predicate, not a cron job**, so an expired ad cannot be served even in the window before `reap_expired_ads()` deletes the row. |
+| `ad_needs_reminder` | Published ads 3 days or less from expiry that have not been reminded yet. Read by `scripts/send-reminders.js`.                                                                                       |
 
 ### Functions
 
-| Function | Returns | Notes |
-| --- | --- | --- |
-| `ping_ad(public_id, token)` | `timestamptz` or `null` | Non-stacking 14-day extension. Null for a bad token and a missing ad alike. |
-| `verify_ad(public_id, verify_token)` | `boolean` | Publishes the ad and clears the verify token. |
-| `renew_via_nudge(public_id, nudge_token)` | `timestamptz` or `null` | Single-use, consumes the token. |
-| `record_ad_view(public_id, viewer_hash, window default '30 minutes')` | `integer` or `null` | Increments at most once per viewer per window. |
-| `report_ad(public_id, reason, detail, reporter_hash, window default '24 hours')` | `text` or `null` | Band name when newly recorded, `''` when this reporter already flagged it, `null` when not live. The caller emails only on a band name. |
-| `close_role(public_id, token, instrument)` | `boolean` | Marks one open role filled. **No route calls this yet.** |
-| `delete_ad(public_id, token)` | `boolean` | Token-gated takedown. **No route calls this yet.** |
-| `reap_expired_ads(grace default '24 hours')` | `integer` | Hard-deletes ads more than `grace` past expiry, cascading to roles, genres, links and reports. Called on every boot by `bootstrap.js` and again by `send-reminders.js`. |
-| `jitter_position(lat, lng, metres)` | `record` | The 700m push behind `display_lat`/`display_lng`. |
+| Function                                                                         | Returns                 | Notes                                                                                                                                                                   |
+| -------------------------------------------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ping_ad(public_id, token)`                                                      | `timestamptz` or `null` | Non-stacking 14-day extension. Null for a bad token and a missing ad alike.                                                                                             |
+| `verify_ad(public_id, verify_token)`                                             | `boolean`               | Publishes the ad and clears the verify token.                                                                                                                           |
+| `renew_via_nudge(public_id, nudge_token)`                                        | `timestamptz` or `null` | Single-use, consumes the token.                                                                                                                                         |
+| `record_ad_view(public_id, viewer_hash, window default '30 minutes')`            | `integer` or `null`     | Increments at most once per viewer per window.                                                                                                                          |
+| `report_ad(public_id, reason, detail, reporter_hash, window default '24 hours')` | `text` or `null`        | Band name when newly recorded, `''` when this reporter already flagged it, `null` when not live. The caller emails only on a band name.                                 |
+| `close_role(public_id, token, instrument)`                                       | `boolean`               | Marks one open role filled. **No route calls this yet.**                                                                                                                |
+| `delete_ad(public_id, token)`                                                    | `boolean`               | Token-gated takedown. **No route calls this yet.**                                                                                                                      |
+| `reap_expired_ads(grace default '24 hours')`                                     | `integer`               | Hard-deletes ads more than `grace` past expiry, cascading to roles, genres, links and reports. Called on every boot by `bootstrap.js` and again by `send-reminders.js`. |
+| `jitter_position(lat, lng, metres)`                                              | `record`                | The 700m push behind `display_lat`/`display_lng`.                                                                                                                       |
 
 Every token-gated function returns `null` or `false` for both a wrong token
 and a missing ad. That is the single most important convention here: it is

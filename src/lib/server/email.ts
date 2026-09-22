@@ -29,30 +29,38 @@ export async function sendVerificationEmail(to: string, bandName: string, verify
 		to,
 		`Confirm your ad for ${bandName}`,
 		`One click and it's live: ${verifyUrl}\n\n` +
-			`This link works once and expires in 24 hours. If you didn't post this ad, ignore this email.`
+			`This link works once and expires in 24 hours. If you didn't post this ad, ignore this email.`,
 	);
 }
 
-export async function sendTokenEmail(to: string, bandName: string, publicId: string, token: string) {
+export async function sendTokenEmail(
+	to: string,
+	bandName: string,
+	publicId: string,
+	token: string,
+) {
 	await send(
 		to,
 		`Your edit token for ${bandName}`,
 		`${bandName} is live. Save these now, they are shown exactly once and cannot be recovered:\n\n` +
 			`Ad code   ${publicId}\n` +
 			`Token     ${token}\n\n` +
-			`You need both to renew, edit, or take down the ad. Nobody, including us, can recover a lost token.`
+			`You need both to renew, edit, or take down the ad. Nobody, including us, can recover a lost token.`,
 	);
 }
 
 export async function sendRenewalReminderEmail(
-	to: string, bandName: string, daysLeft: number, renewUrl: string
+	to: string,
+	bandName: string,
+	daysLeft: number,
+	renewUrl: string,
 ) {
 	await send(
 		to,
 		`${bandName}'s ad comes down in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
 		`Your ad for ${bandName} expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} and will be deleted, not archived.\n\n` +
 			`Renew it for another 14 days: ${renewUrl}\n\n` +
-			`This link works once and expires in 48 hours. If you'd rather let it expire, no action is needed.`
+			`This link works once and expires in 48 hours. If you'd rather let it expire, no action is needed.`,
 	);
 }
 
@@ -87,7 +95,7 @@ export async function sendReportEmail(opts: {
 			`Take it down with:\n` +
 			`  select delete_ad('${opts.publicId}', '<edit token>');\n` +
 			`or straight from psql:\n` +
-			`  delete from ad where public_id = '${opts.publicId}';`
+			`  delete from ad where public_id = '${opts.publicId}';`,
 	);
 	return true;
 }

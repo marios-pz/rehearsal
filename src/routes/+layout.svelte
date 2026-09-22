@@ -16,20 +16,29 @@
 </script>
 
 <div class="shell" onanimationend={clearVeil}>
+	<!-- The board still needs one h1 for search and for screen readers; it
+	     just isn't the thing you look at any more. -->
+	<h1 class="sr-only">Rehearsals</h1>
 	<div class="top">
-		<div>
-			<p class="kicker">Find your band</p>
-			<h1 class="pop">Rehearsals</h1>
-		</div>
+		<a class="mark" href="/support" aria-label="Rehearsals, about and support">
+			<span aria-hidden="true">R</span>
+		</a>
 		<nav class="switch">
-			<a class="pop" href="/" aria-current={page.url.pathname === '/' ? 'page' : undefined}>Find</a>
-			<a class="pop" href="/post" aria-current={page.url.pathname === '/post' ? 'page' : undefined}>Post</a>
-			<a class="pop" href="/renew" aria-current={page.url.pathname === '/renew' ? 'page' : undefined}>Renew</a>
-			<a class="pop" href="/support" aria-current={page.url.pathname === '/support' ? 'page' : undefined}>Support</a>
+			<a href="/" aria-current={page.url.pathname === '/' ? 'page' : undefined}>Find</a>
+			<a href="/post" aria-current={page.url.pathname === '/post' ? 'page' : undefined}>Post</a>
+			<a href="/renew" aria-current={page.url.pathname === '/renew' ? 'page' : undefined}>Renew</a>
+			<a href="/support" aria-current={page.url.pathname === '/support' ? 'page' : undefined}
+				>Support</a
+			>
 		</nav>
 	</div>
 	{@render children()}
-	<a class="coffee-fab torn" href="https://buymeacoffee.com/mariospz" target="_blank" rel="noopener noreferrer">
+	<a
+		class="coffee-fab"
+		href="https://buymeacoffee.com/mariospz"
+		target="_blank"
+		rel="noopener noreferrer"
+	>
 		Buy me a coffee
 	</a>
 </div>

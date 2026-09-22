@@ -1,12 +1,15 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
-const ALPHA = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';   // Crockford-ish: no I, L, O, U
+const ALPHA = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'; // Crockford-ish: no I, L, O, U
 const IDALPHA = 'abcdefghjkmnpqrstuvwxyz23456789';
 
 /** Shown to the band exactly once. Only its hash is ever stored. */
 export function mintToken(): string {
-	return [...randomBytes(20)].map((b) => ALPHA[b & 31]).join('')
-		.replace(/(.{4})/g, '$1-').replace(/-$/, '');
+	return [...randomBytes(20)]
+		.map((b) => ALPHA[b & 31])
+		.join('')
+		.replace(/(.{4})/g, '$1-')
+		.replace(/-$/, '');
 }
 
 export function hashToken(token: string): Buffer {

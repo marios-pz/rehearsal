@@ -1,10 +1,19 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import type { SubmitFunction } from '@sveltejs/kit';
 	import Combobox from '$lib/components/Combobox.svelte';
 	import MapView from '$lib/components/MapView.svelte';
-	import { fold } from '$lib/fuzzy';
-	import { INSTRUMENTS, GENRES, COMMITMENTS, SOCIAL_KINDS, AD_KINDS } from '$lib/taxonomy';
+	import {
+		GENRES,
+		COMMITMENTS,
+		SOCIAL_KINDS,
+		AD_KINDS,
+		INSTRUMENT_CATEGORIES,
+		instrumentArt,
+		LABEL,
+	} from '$lib/taxonomy';
 	import { DRAFT, readDraft, writeDraft, clearDraft, strings } from '$lib/session';
+	import { position } from '$lib/position.svelte';
 	import type { LatLng } from '$lib/types';
 	import { onMount } from 'svelte';
 	import type { PageData, ActionData } from './$types';
@@ -16,7 +25,17 @@
 	let bandName = $state('');
 	let blurb = $state('');
 	let address = $state('');
+	// The families are tabs, and inside the open one you tick as many
+	// instruments as the band is short. Nine cards at once was the thing
+	// that made this a wall on a phone; a tab at a time is four or five.
+	let cat = $state<string>(INSTRUMENT_CATEGORIES[0][0]);
 	let inst = $state<string[]>([]);
+	const members = $derived(INSTRUMENT_CATEGORIES.find(([id]) => id === cat)?.[2] ?? []);
+	const toggle = (id: string) =>
+		(inst = inst.includes(id) ? inst.filter((x) => x !== id) : [...inst, id]);
+	/** How many picks a family holds, so a tab you have already filled stays
+	 *  marked once you move on to the next one. */
+	const picksIn = (ids: readonly string[]) => ids.filter((x) => inst.includes(x)).length;
 	let gen = $state<string[]>([]);
 	let commitment = $state<string>('casual');
 	let kind = $state<string>('member');
@@ -33,17 +52,78 @@
 
 	const socialsReady = $derived(socialKinds.some((k) => socialLinks[k]?.trim()));
 
+	/* ---- the wizard ----------------------------------------------------
+	   One form, four panels. Everything the server reads is emitted from a
+	   single hidden block that is always in the DOM, because a panel behind
+	   an {#if} takes its inputs with it and those values would never post. */
+
+	const STEPS = ['Looking for', 'Band', 'Location', 'Contact'] as const;
+	const LAST = STEPS.length - 1;
+	let stepIx = $state(0);
+
+	// What each panel is still short of, in the order it asks for it.
+	const gaps = $derived([
+		[
+			...(kind !== 'member' && !eventAtLocal ? ['the date'] : []),
+			...(inst.length ? [] : ['at least one instrument']),
+		],
+		bandName ? [] : ['the band name'],
+		pin ? [] : ['the map pin'],
+		[...(socialsReady ? [] : ['a contact link']), ...(email ? [] : ['your email'])],
+	]);
+	const filled = $derived(gaps.map((g) => g.length === 0));
+	const ready = $derived(filled.every(Boolean));
+	const here = $derived(gaps[stepIx]);
+
+	function go(i: number) {
+		stepIx = Math.max(0, Math.min(LAST, i));
+		scrollTo({ top: 0, behavior: 'smooth' });
+	}
+
+	// Enter inside a text field submits a form by default, which on step 1
+	// would post a half-written ad. enhance preventDefaults before calling
+	// this, so cancelling here is enough to stop every early submit.
+	const submit: SubmitFunction = ({ cancel }) => {
+		if (stepIx !== LAST || !ready) cancel();
+	};
+
 	// A half-written ad is real work too, same reasoning as the board's
 	// filters: session-only, and cleared the moment a submission actually
 	// goes through so the next visit starts blank.
 	type Draft = {
-		cc: string; pin: LatLng | null; bandName: string; blurb: string; address: string;
-		inst: string[]; gen: string[]; commitment: string; kind: string; eventAtLocal: string;
-		paid: boolean; socialKinds: string[]; socialLinks: Record<string, string>; email: string;
+		cc: string;
+		pin: LatLng | null;
+		bandName: string;
+		blurb: string;
+		address: string;
+		inst: string[];
+		gen: string[];
+		commitment: string;
+		kind: string;
+		eventAtLocal: string;
+		paid: boolean;
+		socialKinds: string[];
+		socialLinks: Record<string, string>;
+		email: string;
 	};
 	let restored = $state(false);
 
+	// Centring the picker on the poster, once. A pin drop starts on a map
+	// of the whole world, which on a phone means pinch-zooming down from
+	// orbit to find your own street before you can even place it.
+	let locateTick = $state(0);
+	let centred = false;
+	$effect(() => {
+		// Never once a pin exists: flying the map then would yank it out
+		// from under someone adjusting the pin they just placed, and a
+		// restored draft already has one.
+		if (!restored || centred || pin || !position.coords) return;
+		centred = true;
+		locateTick++;
+	});
+
 	onMount(() => {
+		position.request();
 		const saved = readDraft<Draft>(DRAFT.post);
 		if (saved) {
 			cc = saved.cc ?? cc;
@@ -67,8 +147,20 @@
 	$effect(() => {
 		if (!restored) return;
 		writeDraft(DRAFT.post, {
-			cc, pin, bandName, blurb, address, inst, gen, commitment, kind, eventAtLocal, paid,
-			socialKinds, socialLinks, email
+			cc,
+			pin,
+			bandName,
+			blurb,
+			address,
+			inst,
+			gen,
+			commitment,
+			kind,
+			eventAtLocal,
+			paid,
+			socialKinds,
+			socialLinks,
+			email,
 		} satisfies Draft);
 	});
 
@@ -78,128 +170,253 @@
 
 	const countryItems = $derived(
 		data.countries.map((c) => ({
-			id: c.c, label: c.n, sub: c.v && c.v !== c.n ? c.v : null, keys: c.k
-		}))
+			id: c.c,
+			label: c.n,
+			sub: c.v && c.v !== c.n ? c.v : null,
+			keys: c.k,
+		})),
 	);
-	const ready = $derived(!!(
-		bandName && pin && inst.length && socialsReady && email &&
-		(kind === 'member' || eventAtLocal)
-	));
 </script>
 
 {#if form?.posted}
 	<div class="form step veil">
-		<div class="tokenbox" style="border-color:var(--marker)">
-			<h2 style="color:var(--marker)">Check your email</h2>
+		<div class="tokenbox">
+			<h2>Check your email</h2>
 			<p style="font-size:13px;margin:0">
 				A confirm link just went to <b>{form.email}</b>. Click it and {form.bandName} goes live.
 			</p>
 			<p class="hint" style="margin-top:12px">
-				Your ad code and edit token arrive by email too, right after you confirm. Neither is
-				shown on this site at any point, and neither can be recovered if the email is lost.
+				Your ad code and edit token come in the same email. They are never shown here, and if you
+				lose that email they are gone.
 			</p>
 			<a class="social" href="/post">Post another</a>
 		</div>
 	</div>
 {:else}
-	<form class="form step veil" method="POST" use:enhance>
-		<p class="lab">Post an ad</p>
-		<p class="hint">No account, no password. It runs for 14 days and then it is deleted.</p>
+	<form class="form postform step veil" method="POST" use:enhance={submit}>
+		<p class="hint">A star means we cannot post the ad without it.</p>
 
-		<label for="kind">What kind of post is this</label>
-		<div class="radiorow">
-			{#each AD_KINDS as [id, l]}
-				<label class="radiopill" class:on={kind === id}>
-					<input type="radio" name="kind" value={id} bind:group={kind} />
-					{l}
-				</label>
-			{/each}
-		</div>
+		{#if stepIx === 0}
+			<fieldset class="sect">
+				<legend class="secthead">I am looking for</legend>
+				<div class="chips">
+					{#each AD_KINDS as [id, l]}
+						<label class="chip" class:on={kind === id}>
+							<input type="radio" value={id} bind:group={kind} />
+							{l}
+						</label>
+					{/each}
+				</div>
 
-		{#if kind !== 'member'}
-			<label for="event_at">{kind === 'gig' ? 'When the gig is' : 'When the rehearsal is'}</label>
-			<input id="event_at" type="datetime-local" bind:value={eventAtLocal} />
-			<p class="hint" style="margin-top:5px">
-				How urgent this reads takes care of itself: a rehearsal tonight looks different from
-				one three weeks out just from the date, nothing else is needed for that.
-			</p>
+				{#if kind !== 'member'}
+					<label for="event_at">
+						{kind === 'gig' ? 'When the gig is' : 'When the rehearsal is'}<span class="req">*</span>
+					</label>
+					<input id="event_at" type="datetime-local" bind:value={eventAtLocal} />
+				{/if}
+			</fieldset>
+
+			<fieldset class="sect">
+				<legend class="secthead">Select your instruments<span class="req">*</span></legend>
+
+				<div class="cats">
+					{#each INSTRUMENT_CATEGORIES as [id, l, ids]}
+						{@const n = picksIn(ids)}
+						<!-- A family you have already picked from stays lit after you
+						     move to another tab, so what you filled is visible from
+						     wherever you are rather than only while it is open. -->
+						<button
+							class="cat"
+							class:on={cat === id}
+							class:filled={n > 0}
+							type="button"
+							aria-pressed={cat === id}
+							onclick={() => (cat = id)}
+						>
+							{l}{#if n}<span class="catn">{n}</span>{/if}
+						</button>
+					{/each}
+				</div>
+
+				<!-- A scroll-snap rail: on a phone it swipes, on a wide screen the
+				     same markup lays itself out as a grid. No carousel script, no
+				     drag handlers, no library. -->
+				<div class="rail">
+					{#each members as id (id)}
+						<label class="icard" class:on={inst.includes(id)}>
+							<input type="checkbox" checked={inst.includes(id)} onchange={() => toggle(id)} />
+							<span class="iart" style="--art: url('{instrumentArt(id)}')"></span>
+							<span class="iname">{LABEL[id]}</span>
+						</label>
+					{/each}
+				</div>
+
+				<p class="picked">
+					{#if inst.length}Wanted: {inst.map((id) => LABEL[id]).join(', ')}
+					{:else}Nothing picked yet.{/if}
+				</p>
+
+				<div class="chips" style="margin-top:16px">
+					<label class="chip paidchip" class:on={paid}>
+						<input type="checkbox" bind:checked={paid} />
+						Paid position
+					</label>
+				</div>
+			</fieldset>
+		{:else if stepIx === 1}
+			<fieldset class="sect">
+				<legend class="secthead">Band</legend>
+
+				<label for="band_name">Band name<span class="req">*</span></label>
+				<input
+					id="band_name"
+					type="text"
+					maxlength="80"
+					bind:value={bandName}
+					placeholder="Rust Verdict"
+				/>
+
+				<label for="blurb">What you are looking for</label>
+				<textarea
+					id="blurb"
+					maxlength="600"
+					rows="4"
+					bind:value={blurb}
+					placeholder="Twice a week in Gazi, gigs by spring. Sabbath and Kyuss, not shred."
+				></textarea>
+
+				<p class="fieldname">Genre</p>
+				<div class="chips">
+					{#each GENRES as [id, l]}
+						<label class="chip" class:on={gen.includes(id)}>
+							<input type="checkbox" value={id} bind:group={gen} />
+							{l}
+						</label>
+					{/each}
+				</div>
+
+				<p class="fieldname">How serious</p>
+				<div class="chips">
+					{#each COMMITMENTS as [id, l]}
+						<label class="chip" class:on={commitment === id}>
+							<input type="radio" value={id} bind:group={commitment} />
+							{l}
+						</label>
+					{/each}
+				</div>
+			</fieldset>
+		{:else if stepIx === 2}
+			<fieldset class="sect">
+				<legend class="secthead">Location</legend>
+
+				<label for="country">Country</label>
+				<Combobox
+					items={countryItems}
+					bind:value={cc}
+					flag
+					label="Country"
+					placeholder="Greece"
+					group="Countries"
+				/>
+
+				<label for="address">Rehearsal room or studio address</label>
+				<input
+					id="address"
+					type="text"
+					bind:value={address}
+					placeholder="Kallidromiou 42, Exarchia"
+				/>
+
+				<p class="fieldname">
+					Drop the pin<span class="req">*</span>{#if pin}<span class="done">placed</span>{/if}
+				</p>
+				<MapView pickable onpick={(p) => (pin = p)} meCoords={position.coords} {locateTick} />
+				<p class="hint" style="margin-top:8px">The public map shifts this by up to 700m.</p>
+			</fieldset>
+		{:else}
+			<fieldset class="sect">
+				<legend class="secthead">Contact</legend>
+
+				<p class="fieldname">Where they reach you<span class="req">*</span></p>
+				<div class="chips">
+					{#each SOCIAL_KINDS as [id, l]}
+						<label class="chip" class:on={socialKinds.includes(id)}>
+							<input type="checkbox" value={id} bind:group={socialKinds} />
+							{l}
+						</label>
+					{/each}
+				</div>
+
+				{#each socialKinds as k (k)}
+					<label for="social-{k}">{SOCIAL_KINDS.find(([id]) => id === k)?.[1] ?? k} link</label>
+					<input
+						id="social-{k}"
+						type="url"
+						inputmode="url"
+						autocapitalize="off"
+						autocorrect="off"
+						spellcheck="false"
+						value={socialLinks[k] ?? ''}
+						oninput={(e) => (socialLinks[k] = e.currentTarget.value)}
+						placeholder="https://{k}.com/yourband"
+					/>
+				{/each}
+
+				<label for="email">Email, only for the renewal link<span class="req">*</span></label>
+				<input
+					id="email"
+					type="email"
+					inputmode="email"
+					autocapitalize="off"
+					autocorrect="off"
+					spellcheck="false"
+					bind:value={email}
+					placeholder="you@example.com"
+				/>
+			</fieldset>
 		{/if}
+
+		<!-- Every field the action reads, in one block that is never behind a
+		     step conditional. The visible controls above carry no `name` at
+		     all: they bind state, and this posts it. -->
+		<input type="hidden" name="kind" value={kind} />
 		<input type="hidden" name="event_at" value={kind !== 'member' ? eventAtIso : ''} />
-
-		<label for="band_name">Band name</label>
-		<input id="band_name" name="band_name" type="text" maxlength="80"
-			bind:value={bandName} placeholder="Rust Verdict" />
-
-		<label for="blurb">What are you looking for</label>
-		<textarea id="blurb" name="blurb" maxlength="600" rows="3" bind:value={blurb}
-			placeholder="Rehearsal twice a week, gigs by spring, into Sabbath and Kyuss more than technical stuff."
-		></textarea>
-
-		<label for="instruments">What do you need</label>
-		<Combobox items={INSTRUMENTS.map(([id, l]) => ({ id, label: l, keys: [fold(l), id] }))}
-			bind:value={inst} multi label="Instruments" placeholder="drums, bass, vocals"
-			group="Instruments" noMatch="No instrument matches. Try a shorter word." />
-		{#each inst as i}<input type="hidden" name="instrument" value={i} />{/each}
-
-		<label for="country">Country</label>
-		<Combobox items={countryItems} bind:value={cc} flag label="Country"
-			placeholder="Search a country" group="Countries" />
+		<input type="hidden" name="band_name" value={bandName} />
+		<input type="hidden" name="blurb" value={blurb} />
+		<input type="hidden" name="commitment" value={commitment} />
 		<input type="hidden" name="country" value={cc} />
-
-		<label for="address">Rehearsal room or studio address</label>
-		<input id="address" name="address" type="text" bind:value={address} placeholder="Kallidromiou 42, Exarchia" />
-
-		<p class="fieldname">Drop the pin</p>
-		<MapView pickable onpick={(p) => (pin = p)} />
-		<p class="hint" style="margin-top:7px">
-			The public map shows this shifted by up to 700m. Nobody gets the exact address of a
-			room full of gear out of a browser.
-		</p>
+		<input type="hidden" name="address" value={address} />
 		<input type="hidden" name="pin_lat" value={pin?.lat ?? ''} />
 		<input type="hidden" name="pin_lng" value={pin?.lng ?? ''} />
-
-		<label for="genres">Genre</label>
-		<Combobox items={GENRES.map(([id, l]) => ({ id, label: l, keys: [fold(l), id] }))}
-			bind:value={gen} multi label="Genres" placeholder="thrash, doom, post-rock"
-			group="Genres" noMatch="No genre matches that." />
-		{#each gen as g}<input type="hidden" name="genre" value={g} />{/each}
-
-		<label for="commitment">How serious</label>
-		<div class="radiorow">
-			{#each COMMITMENTS as [id, l]}
-				<label class="radiopill" class:on={commitment === id}>
-					<input type="radio" name="commitment" value={id} bind:group={commitment} />
-					{l}
-				</label>
-			{/each}
-		</div>
-
-		<label class="checkline">
-			<input type="checkbox" name="paid" bind:checked={paid} />
-			This is a paid position
-		</label>
-
-		<label for="socials">Where you want to be contacted</label>
-		<p class="hint" style="margin:0 0 7px">Pick every platform you actually check, then paste each link.</p>
-		<Combobox items={SOCIAL_KINDS.map(([id, l]) => ({ id, label: l, keys: [fold(l), id] }))}
-			bind:value={socialKinds} multi label="Socials" placeholder="instagram, facebook, tiktok"
-			group="Socials" noMatch="No platform matches that." />
-		{#each socialKinds as kind (kind)}
-			<input type="hidden" name="social_kind" value={kind} />
-			<label for="social-{kind}" class="fieldname" style="margin-top:10px">
-				{SOCIAL_KINDS.find(([id]) => id === kind)?.[1] ?? kind} link
-			</label>
-			<input id="social-{kind}" name="social_url" type="text"
-				value={socialLinks[kind] ?? ''}
-				oninput={(e) => (socialLinks[kind] = e.currentTarget.value)}
-				placeholder="https://{kind}.com/yourband" />
+		<input type="hidden" name="email" value={email} />
+		{#if paid}<input type="hidden" name="paid" value="on" />{/if}
+		{#each inst as id}<input type="hidden" name="instrument" value={id} />{/each}
+		{#each gen as id}<input type="hidden" name="genre" value={id} />{/each}
+		<!-- Emitted as a pair inside one loop: the server zips these two by
+		     index, so they have to stay in lockstep. -->
+		{#each socialKinds as k (k)}
+			<input type="hidden" name="social_kind" value={k} />
+			<input type="hidden" name="social_url" value={socialLinks[k] ?? ''} />
 		{/each}
-
-		<label for="email">Your email, for the renewal link only</label>
-		<input id="email" name="email" type="email" bind:value={email} placeholder="you@example.com" />
 
 		{#if form?.error}<p class="err">{form.error}</p>{/if}
 
-		<button class="go" type="submit" disabled={!ready}>Send</button>
+		<!-- Back on the left, forward on the right, nothing in between but
+		     what the panel is still short of. -->
+		<div class="submitbar">
+			{#if stepIx > 0}
+				<button class="back" type="button" onclick={() => go(stepIx - 1)}>Back</button>
+			{/if}
+			<p class="missing">
+				{#if here.length}Needs {here[0]}{#if here.length > 1}, and {here.length - 1} more{/if}.
+				{:else if stepIx === LAST}Ready to post.
+				{:else}Done.{/if}
+			</p>
+			{#if stepIx < LAST}
+				<button class="go" type="button" onclick={() => go(stepIx + 1)}>Continue</button>
+			{:else}
+				<button class="go" type="submit" disabled={!ready}>Send</button>
+			{/if}
+		</div>
 	</form>
 {/if}

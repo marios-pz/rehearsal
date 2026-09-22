@@ -20,7 +20,9 @@ const REASONS = new Set<string>(REPORT_REASONS.map(([slug]) => slug));
 export const POST: RequestHandler = async ({ params, request, getClientAddress, url }) => {
 	const body = await request.json().catch(() => null);
 	const reason = String(body?.reason ?? '');
-	const detail = String(body?.detail ?? '').trim().slice(0, 600);
+	const detail = String(body?.detail ?? '')
+		.trim()
+		.slice(0, 600);
 
 	if (!REASONS.has(reason)) error(400, 'unknown reason');
 
@@ -39,7 +41,8 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress, 
 			const sent = await sendReportEmail({ publicId, bandName, reason, detail, board: origin });
 			// The report is already committed. A missing ADMIN_EMAIL or a
 			// dead mail provider must not lose it, so it goes to the log.
-			if (!sent) console.warn(`report recorded for ${publicId} (${reason}), ADMIN_EMAIL is not set`);
+			if (!sent)
+				console.warn(`report recorded for ${publicId} (${reason}), ADMIN_EMAIL is not set`);
 		} catch (err) {
 			console.error(`report recorded for ${publicId} (${reason}), email failed`, err);
 		}

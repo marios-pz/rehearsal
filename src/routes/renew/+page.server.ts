@@ -9,7 +9,7 @@ const day = (d: Date) => d.toISOString().slice(0, 10);
 
 export const load: PageServerLoad = async ({ url }) => ({
 	nudgeId: url.searchParams.get('id') ?? '',
-	nudge: url.searchParams.get('nudge') ?? ''
+	nudge: url.searchParams.get('nudge') ?? '',
 });
 
 export const actions: Actions = {
@@ -19,7 +19,8 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const id = text(f, 'public_id');
 		const token = text(f, 'token');
-		if (!id || !token) return fail(400, { id, error: 'Both the ad code and the token are needed.' });
+		if (!id || !token)
+			return fail(400, { id, error: 'Both the ad code and the token are needed.' });
 
 		const until = await pingAd(id, token);
 		if (!until) {
@@ -27,8 +28,9 @@ export const actions: Actions = {
 			// walk the public_id space to find out which ads exist.
 			return fail(404, {
 				id,
-				error: 'That code and token do not go together, or the ad has already been deleted. ' +
-				       'A lost token cannot be reset.'
+				error:
+					'That code and token do not go together, or the ad has already been deleted. ' +
+					'A lost token cannot be reset.',
 			});
 		}
 		return { renewed: true, until: day(until) };
@@ -46,5 +48,5 @@ export const actions: Actions = {
 		const until = await renewViaNudge(id, nudge);
 		if (!until) return fail(400, { error: 'This link is invalid or has expired.' });
 		return { renewed: true, until: day(until) };
-	}
+	},
 };

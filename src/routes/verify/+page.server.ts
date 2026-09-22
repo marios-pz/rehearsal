@@ -9,7 +9,7 @@ import { text } from '$lib/server/form';
 
 export const load: PageServerLoad = async ({ url }) => ({
 	id: url.searchParams.get('id') ?? '',
-	token: url.searchParams.get('token') ?? ''
+	token: url.searchParams.get('token') ?? '',
 });
 
 export const actions: Actions = {
@@ -45,10 +45,11 @@ export const actions: Actions = {
 		} catch (err) {
 			console.error('token email failed', err);
 			return fail(500, {
-				error: 'Verified, but the token email could not be sent. Contact the admin, the ad is live but you have no way to edit it.'
+				error:
+					'Verified, but the token email could not be sent. Contact the admin, the ad is live but you have no way to edit it.',
 			});
 		}
 
 		return { verified: true, bandName: row.band_name };
-	}
+	},
 };

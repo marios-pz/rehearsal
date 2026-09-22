@@ -12,8 +12,11 @@ import countries from '$lib/data/countries.json';
 
 /** Anything a client sends that is not in these is dropped or rejected. */
 const VALID = {
-	instrument: slugsOf(INSTRUMENTS), genre: slugsOf(GENRES), commitment: slugsOf(COMMITMENTS),
-	social: slugsOf(SOCIAL_KINDS), kind: slugsOf(AD_KINDS)
+	instrument: slugsOf(INSTRUMENTS),
+	genre: slugsOf(GENRES),
+	commitment: slugsOf(COMMITMENTS),
+	social: slugsOf(SOCIAL_KINDS),
+	kind: slugsOf(AD_KINDS),
 };
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -54,8 +57,17 @@ export const actions: Actions = {
 
 		// Echoed back with any failure so the form redraws filled in.
 		const values = {
-			bandName, blurb, cc: countryCode, commitment, kind,
-			eventAt: eventAtRaw, email, address, instruments, genres, paid
+			bandName,
+			blurb,
+			cc: countryCode,
+			commitment,
+			kind,
+			eventAt: eventAtRaw,
+			email,
+			address,
+			instruments,
+			genres,
+			paid,
 		};
 		const reject = (message: string) => fail(400, { ...values, error: message });
 
@@ -120,15 +132,19 @@ export const actions: Actions = {
 			// same-origin form check (see docker-compose.yml) and the one
 			// send-reminders.js already uses for its renewal links.
 			const origin = env.ORIGIN ?? url.origin;
-			await sendVerificationEmail(email, bandName, `${origin}/verify?id=${id}&token=${verifyToken}`);
+			await sendVerificationEmail(
+				email,
+				bandName,
+				`${origin}/verify?id=${id}&token=${verifyToken}`,
+			);
 		} catch (err) {
 			console.error('verification email failed', err);
 			return fail(500, {
 				...values,
-				error: 'The ad was saved but the confirmation email could not be sent. Try posting again.'
+				error: 'The ad was saved but the confirmation email could not be sent. Try posting again.',
 			});
 		}
 
 		return { posted: true, bandName, email };
-	}
+	},
 };

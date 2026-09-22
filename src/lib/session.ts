@@ -13,7 +13,7 @@
 
 export const DRAFT = {
 	filters: 'rehearsal:filters',
-	post: 'rehearsal:post-draft'
+	post: 'rehearsal:post-draft',
 } as const;
 
 export function readDraft<T>(key: string): Partial<T> | null {

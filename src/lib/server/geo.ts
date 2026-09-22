@@ -12,6 +12,6 @@ export function jitter(lat: number, lng: number, metres = 700) {
 	const rad = Math.sqrt(Math.random()) * metres;
 	return {
 		lat: +(lat + (rad * Math.cos(ang)) / 111_320).toFixed(6),
-		lng: +(lng + (rad * Math.sin(ang)) / (111_320 * Math.cos((lat * Math.PI) / 180))).toFixed(6)
+		lng: +(lng + (rad * Math.sin(ang)) / (111_320 * Math.cos((lat * Math.PI) / 180))).toFixed(6),
 	};
 }

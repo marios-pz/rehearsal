@@ -144,8 +144,65 @@ npm run build
 npm start
 ```
 
-`npm start` and `npm run dev` both run `scripts/bootstrap.js` first. Nothing
-else needs doing to a fresh Postgres.
+Both `npm start` and `npm run dev` go through the same three gates, in this
+order: **unit tests**, then **migrations**, then the app.
+
+```
+npm test            unit tests, no database, ~150ms
+npm run db:bootstrap  migrations and reference data
+                    the server
+```
+
+The first two are npm `prestart` / `predev` hooks, so there is no way to
+start the app around them, including inside the container. Nothing else
+needs doing to a fresh Postgres.
+
+## Formatting
+
+`npm run format` (Prettier). `npm install` points `core.hooksPath` at
+`.githooks/`, whose pre-commit hook formats the staged files and restages
+them, so formatting is never its own commit. `git commit --no-verify` skips
+it. `src/app.css`, `drizzle/` and `static/` are in `.prettierignore`: the
+CSS is hand-set several declarations to a line, and the other two are not
+ours to reformat.
+
+## Tests
+
+`npm test` runs the node built-in test runner over `test/*.test.ts`. No
+framework, no config, no transpile step: Node 24 strips the types itself.
+
+`npm run test:integration` is the other half, and it needs a database:
+point `DATABASE_URL` at a throwaway Postgres and it runs
+`scripts/bootstrap.js` against it for real. Without that variable the suite
+skips itself, so it never blocks a start. It checks the things only a
+server can answer: extensions created before the first migration, every
+file in `drizzle/` applied, a second run changing nothing, an **edited
+migration refusing to deploy**, and `ad_live` hiding an ad until it is
+published and again once it expires.
+
+The unit tests cover the parts where being wrong is expensive and quiet: the jitter
+that hides a rehearsal room's real address (never past its radius, evenly
+spread over the disc), the token minting and hashing, form parsing and the
+taxonomy invariants (every instrument in exactly one family, artwork on
+disk for each one). Anything that needs Postgres is not in here; that
+belongs in its own job with a service container, not in the gate that runs
+before every start.
+
+## CI
+
+`.github/workflows/ci.yml`, in order:
+
+1. **test** - `npm ci`, `npm run check`, `npm test`
+2. **integration** - the same suite as above against a `postgres:18-alpine`
+   service container, empty, one per run
+3. **image** - build, then Trivy for HIGH and CRITICAL with `--ignore-unfixed`,
+   then push to `ghcr.io/<owner>/rehearsal`
+
+Nothing is pushed that has not been tested and scanned, and a pull request
+runs every step except the push. Images carry the OCI labels (`revision`,
+`source`, `version`, `created`, `title`, `licenses`), and the run summary
+prints the digest, which is what you deploy: a tag can be moved, a digest
+cannot.
 
 ## The database gate
 

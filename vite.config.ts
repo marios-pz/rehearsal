@@ -17,12 +17,15 @@ import { defineConfig } from 'vite';
 // time to track down once. `.test` is IANA-reserved for exactly this and
 // carries no such baggage.
 const devHost = (() => {
-	try { return new URL(process.env.ORIGIN ?? '').hostname || undefined; }
-	catch { return undefined; }
+	try {
+		return new URL(process.env.ORIGIN ?? '').hostname || undefined;
+	} catch {
+		return undefined;
+	}
 })();
 
 export default defineConfig({
 	plugins: [sveltekit()],
 	server: { host: '0.0.0.0', port: 3000, allowedHosts: devHost ? [devHost] : undefined },
-	preview: { host: '0.0.0.0', port: 3000, allowedHosts: devHost ? [devHost] : undefined }
+	preview: { host: '0.0.0.0', port: 3000, allowedHosts: devHost ? [devHost] : undefined },
 });

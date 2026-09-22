@@ -35,7 +35,9 @@
 		const saved = page.url.searchParams.size === 0 ? readDraft<Filters>(DRAFT.filters) : null;
 		if (!saved) return void (restored = true);
 		const apply = () => {
-			inst = strings(saved.inst); gen = strings(saved.gen); commit = strings(saved.commit);
+			inst = strings(saved.inst);
+			gen = strings(saved.gen);
+			commit = strings(saved.commit);
 			restored = true;
 		};
 		if (saved.cc && saved.cc !== cc) switchCountry(saved.cc).then(apply);
@@ -53,11 +55,21 @@
 		history.replaceState(null, '', `?${q}`);
 	});
 
+	// One sheet on a phone, the plain bar on a desktop: same markup, the
+	// dialog just stops being display:none above 560px.
+	let filterSheet = $state<HTMLDialogElement>();
+	const picked = $derived(inst.length + gen.length + commit.length);
+
 	const countryItems = $derived(
-		data.countries.map((c) => ({
-			id: c.c, label: c.n, sub: c.v && c.v !== c.n ? c.v : null, keys: c.k,
-			right: data.counts[c.c] ? `<b>${data.counts[c.c]}</b> ads` : 'be the first'
-		})).sort((a, b) => (data.counts[b.id] ?? 0) - (data.counts[a.id] ?? 0))
+		data.countries
+			.map((c) => ({
+				id: c.c,
+				label: c.n,
+				sub: c.v && c.v !== c.n ? c.v : null,
+				keys: c.k,
+				right: data.counts[c.c] ? `<b>${data.counts[c.c]}</b> ads` : 'be the first',
+			}))
+			.sort((a, b) => (data.counts[b.id] ?? 0) - (data.counts[a.id] ?? 0)),
 	);
 
 	async function switchCountry(next: string) {
@@ -76,8 +88,10 @@
 	let mapBounds = $state<Bounds | null>(null);
 	const inView = (a: AdRow) =>
 		!mapBounds ||
-		(a.display_lat >= mapBounds.south && a.display_lat <= mapBounds.north &&
-		 a.display_lng >= mapBounds.west && a.display_lng <= mapBounds.east);
+		(a.display_lat >= mapBounds.south &&
+			a.display_lat <= mapBounds.north &&
+			a.display_lng >= mapBounds.west &&
+			a.display_lng <= mapBounds.east);
 
 	// The "Search Near Me" button. locateTick is the actual trigger MapView reacts
 	// to (see its own comment): a click either fires it immediately, if a
@@ -110,7 +124,10 @@
 	const OFFSCREEN = 'in this part of the map. Pan or zoom out to see more.';
 	const EMPTY = {
 		gigs: { none: 'No gigs posted yet.', offscreen: `No gigs ${OFFSCREEN}` },
-		recruit: { none: 'No open spots yet. Be the first to post one.', offscreen: `No open spots ${OFFSCREEN}` }
+		recruit: {
+			none: 'No open spots yet. Be the first to post one.',
+			offscreen: `No open spots ${OFFSCREEN}`,
+		},
 	};
 	const empty = $derived(EMPTY[view]);
 
@@ -131,13 +148,16 @@
 	// commitment is its own independent signal, same weight class as a
 	// single genre match, never coupled to `paid`, which stays its own
 	// untouched boolean throughout.
-	const DISTANCE_MAX = 24, DISTANCE_HALFLIFE_KM = 50;
+	const DISTANCE_MAX = 24,
+		DISTANCE_HALFLIFE_KM = 50;
 	function score(a: AdRow): number {
 		const km = distanceKm(a);
-		return (a.needs.some((n) => inst.includes(n)) ? 46 : 0) +
+		return (
+			(a.needs.some((n) => inst.includes(n)) ? 46 : 0) +
 			20 * a.genres.filter((g) => gen.includes(g)).length +
 			(km === null ? 0 : DISTANCE_MAX * Math.pow(2, -km / DISTANCE_HALFLIFE_KM)) +
-			(commit.includes(a.commitment) ? 15 : 0);
+			(commit.includes(a.commitment) ? 15 : 0)
+		);
 	}
 
 	// A gig or a rehearsal is a dated, short-term ask, so it sorts by
@@ -152,15 +172,20 @@
 	const visible = $derived(
 		showGigs
 			? ads.filter((a) => a.kind !== 'member').sort(soonest)
-			: ads.filter((a) => a.kind === 'member').sort((x, y) => score(y) - score(x))
+			: ads.filter((a) => a.kind === 'member').sort((x, y) => score(y) - score(x)),
 	);
 	const visibleInView = $derived(visible.filter(inView));
 
+	// The pin says who, not what: an ad can be short a drummer, a bass and
+	// a singer at once, and one of the three on the pin was a coin toss.
 	const pins = $derived(
 		visible.map((a) => ({
-			id: a.public_id, lat: a.display_lat, lng: a.display_lng, paid: a.paid,
-			label: (a.needs[0] ?? '').split('-')[0].toUpperCase()
-		}))
+			id: a.public_id,
+			lat: a.display_lat,
+			lng: a.display_lng,
+			paid: a.paid,
+			label: a.band_name,
+		})),
 	);
 
 	function formatEventAt(iso: string): string {
@@ -189,8 +214,12 @@
 		seenViews.add(id);
 		fetch(`/api/ads/${id}/view`, { method: 'POST' })
 			.then((r) => (r.ok ? r.json() : null))
-			.then((res) => { if (res?.view_count != null) viewOverrides[id] = res.view_count; })
-			.catch(() => { /* a missed view count is not worth surfacing an error for */ });
+			.then((res) => {
+				if (res?.view_count != null) viewOverrides[id] = res.view_count;
+			})
+			.catch(() => {
+				/* a missed view count is not worth surfacing an error for */
+			});
 	});
 
 	// Reporting. Anyone can post an ad pointing at someone else's Instagram,
@@ -218,7 +247,7 @@
 			const r = await fetch(`/api/ads/${reporting.public_id}/report`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ reason: reportReason, detail: reportDetail })
+				body: JSON.stringify({ reason: reportReason, detail: reportDetail }),
 			});
 			// A wrong id and an already-reported ad both answer 202: the
 			// clicker learns nothing either way, which is the point.
@@ -249,8 +278,17 @@
 
 {#snippet views(a: AdRow)}
 	<span class="views" title={plural(viewsOf(a), 'view')}>
-		<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor"
-			stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+		<svg
+			viewBox="0 0 24 24"
+			width="11"
+			height="11"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2.2"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+			aria-hidden="true"
+		>
 			<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z" />
 			<circle cx="12" cy="12" r="3" />
 		</svg>{viewsOf(a)}
@@ -259,25 +297,39 @@
 
 {#snippet tags(a: AdRow, withGenres: boolean)}
 	<div class="row">
-		{#each a.needs as n}<span class="tag" class:hit={inst.includes(n)}>Needs {LABEL[n] ?? n}</span>{/each}
+		{#each a.needs as n}<span class="tag" class:hit={inst.includes(n)}>Needs {LABEL[n] ?? n}</span
+			>{/each}
 		{#if withGenres}
-			{#each a.genres as g}<span class="tag" class:hit={gen.includes(g)}>{LABEL[g] ?? g}</span>{/each}
+			{#each a.genres as g}<span class="tag" class:hit={gen.includes(g)}>{LABEL[g] ?? g}</span
+				>{/each}
 		{/if}
 	</div>
 {/snippet}
 
 {#snippet flag(a: AdRow)}
-	<button type="button" class="flag" title="Report this ad"
-		aria-label="Report {a.band_name}" onclick={() => openReport(a)}>!</button>
+	<button
+		type="button"
+		class="flag"
+		title="Report this ad"
+		aria-label="Report {a.band_name}"
+		onclick={() => openReport(a)}>!</button
+	>
 {/snippet}
 
 {#snippet gigCard(a: AdRow)}
 	<div class="cardwrap">
-		<button class="card gigcard" class:on={selected === a.public_id} onclick={() => pick(a.public_id)}>
+		<button
+			class="card gigcard"
+			class:on={selected === a.public_id}
+			onclick={() => pick(a.public_id)}
+		>
 			<div class="gigwhen">{formatEventAt(a.event_at ?? '')}</div>
 			<h3>{a.band_name}</h3>
 			{@render views(a)}
-			<div class="meta">{LABEL[a.kind]}{#if distanceLabel(a)} · {distanceLabel(a)}{/if}</div>
+			<div class="meta">
+				{LABEL[a.kind]}{#if distanceLabel(a)}
+					· {distanceLabel(a)}{/if}
+			</div>
 			{@render tags(a, false)}
 		</button>
 		{@render flag(a)}
@@ -286,14 +338,21 @@
 
 {#snippet adCard(a: AdRow)}
 	<div class="cardwrap">
-		<button class="card" class:on={selected === a.public_id} onclick={() => pick(a.public_id)}
-			onpointerenter={() => (hot = a.public_id)} onpointerleave={() => (hot = null)}>
+		<button
+			class="card"
+			class:on={selected === a.public_id}
+			onclick={() => pick(a.public_id)}
+			onpointerenter={() => (hot = a.public_id)}
+			onpointerleave={() => (hot = null)}
+		>
 			<h3>{a.band_name}</h3>
 			<span class="lvl" class:hit={commit.includes(a.commitment)}>{a.commitment}</span>
 			{@render views(a)}
 			<div class="meta">
-				{#if distanceLabel(a)}{distanceLabel(a)} · {/if}
-				{#if a.paid}<span class="paid">Paid</span> · {/if}
+				{#if distanceLabel(a)}{distanceLabel(a)} ·
+				{/if}
+				{#if a.paid}<span class="paid">Paid</span> ·
+				{/if}
 				<span class="expiry" class:soon={a.days_left <= 3}>{a.days_left}d left</span>
 			</div>
 			{@render tags(a, true)}
@@ -302,77 +361,126 @@
 	</div>
 {/snippet}
 
-<div class="filterbar step veil">
-	<div class="filtercol">
-		<label for="country">Country</label>
-		<Combobox items={countryItems} value={cc} flag label="Country"
-			placeholder="Search a country" group="Where bands are posting"
-			noMatch="No country matches. Try the local spelling."
-			onchange={(v) => v && switchCountry(v as string)} />
-	</div>
-	<div class="filtercol">
-		<label for="instruments">I play</label>
-		<Combobox items={INSTRUMENTS.map(([id, l]) => ({ id, label: l, keys: [fold(l), id] }))}
-			bind:value={inst} multi label="Instruments" placeholder="drums, bass, vocals"
-			group="Instruments" noMatch="No instrument matches. Try a shorter word." />
-	</div>
-	<div class="filtercol">
-		<label for="genres">Genre</label>
-		<Combobox items={GENRES.map(([id, l]) => ({ id, label: l, keys: [fold(l), id] }))}
-			bind:value={gen} multi label="Genres" placeholder="thrash, doom, post-rock"
-			group="Genres" noMatch="No genre matches that." />
-	</div>
-	<div class="filtercol">
-		<label for="commitment">How serious</label>
-		<Combobox items={COMMITMENTS.map(([id, l]) => ({ id, label: l, keys: [fold(l), id] }))}
-			bind:value={commit} multi label="Commitment" placeholder="casual, serious, professional"
-			group="Commitment" noMatch="No match for that." />
-	</div>
-</div>
+<button class="filterbtn" type="button" onclick={() => filterSheet?.showModal()}>
+	<span>Filters</span>
+	{#if picked}<span class="filtern">{picked} on</span>{:else}<span class="filtern">all ads</span
+		>{/if}
+</button>
 
-<div class="nearmerow">
-	<button type="button" class="nearme" onclick={searchNearMe}>
-		<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
-			<path d="M12 2C7.58 2 4 5.58 4 10c0 5.25 7 12 8 12s8-6.75 8-12c0-4.42-3.58-8-8-8Zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z" />
-		</svg>
-		Search Near Me
-	</button>
-	{#if locateAttempted && position.status === 'denied'}
-		<p class="hint" style="text-align:center;margin-top:6px">Location access was denied.</p>
-	{/if}
-</div>
+<dialog bind:this={filterSheet} class="board controls filtersheet veil">
+	<div class="filterbar">
+		<div class="filtercol">
+			<label for="country">Country</label>
+			<Combobox
+				items={countryItems}
+				value={cc}
+				flag
+				label="Country"
+				placeholder="Greece"
+				group="Where bands are posting"
+				noMatch="No country matches. Try the local spelling."
+				onchange={(v) => v && switchCountry(v as string)}
+			/>
+		</div>
+		<div class="filtercol">
+			<label for="instruments">I play</label>
+			<Combobox
+				items={INSTRUMENTS.map(([id, l]) => ({ id, label: l, keys: [fold(l), id] }))}
+				bind:value={inst}
+				multi
+				label="Instruments"
+				placeholder="Drums"
+				group="Instruments"
+				noMatch="No instrument matches. Try a shorter word."
+			/>
+		</div>
+		<div class="filtercol">
+			<label for="genres">Genre</label>
+			<Combobox
+				items={GENRES.map(([id, l]) => ({ id, label: l, keys: [fold(l), id] }))}
+				bind:value={gen}
+				multi
+				label="Genres"
+				placeholder="Doom"
+				group="Genres"
+				noMatch="No genre matches that."
+			/>
+		</div>
+		<div class="filtercol">
+			<label for="commitment">How serious</label>
+			<Combobox
+				items={COMMITMENTS.map(([id, l]) => ({ id, label: l, keys: [fold(l), id] }))}
+				bind:value={commit}
+				multi
+				label="Commitment"
+				placeholder="Serious"
+				group="Commitment"
+				noMatch="No match for that."
+			/>
+		</div>
+	</div>
+	<button class="go sheetdone" type="button" onclick={() => filterSheet?.close()}>Show ads</button>
+</dialog>
 
-<div class="switch" style="margin-bottom:16px">
-	<button type="button" class="switchbtn" class:on={showGigs} onclick={() => (view = 'gigs')}>Gigs</button>
-	<button type="button" class="switchbtn" class:on={!showGigs} onclick={() => (view = 'recruit')}>Recruit</button>
-</div>
-
-<div class="board veil">
-	<div class="split">
-		<div>
+<!-- Two separate panels with air between them, not one box holding both.
+     The view toggle lives in the list's own header rather than floating
+     above the pair: it only ever changes what the list is made of. -->
+<div class="split">
+	<section class="board listboard veil">
+		<header class="boardhead">
 			<p class="count">{plural(visibleInView.length, 'ad')} in view</p>
-			<div class="list">
-				{#if zoomGated}
-					<p class="hint">Zoom in on the map to see ads in that area.</p>
-				{:else}
-					{#each visibleInView as a (a.public_id)}
-						{#if showGigs}{@render gigCard(a)}{:else}{@render adCard(a)}{/if}
-					{/each}
-					{#if !visible.length}
-						<p class="hint">{empty.none}</p>
-					{:else if !visibleInView.length}
-						<p class="hint">{empty.offscreen}</p>
-					{/if}
-				{/if}
+			<div class="switch">
+				<button type="button" class="switchbtn" class:on={showGigs} onclick={() => (view = 'gigs')}
+					>Gigs</button
+				>
+				<button
+					type="button"
+					class="switchbtn"
+					class:on={!showGigs}
+					onclick={() => (view = 'recruit')}>Recruit</button
+				>
 			</div>
+		</header>
+		<div class="list">
+			{#if zoomGated}
+				<p class="hint">Zoom in to see ads there.</p>
+			{:else}
+				{#each visibleInView as a (a.public_id)}
+					{#if showGigs}{@render gigCard(a)}{:else}{@render adCard(a)}{/if}
+				{/each}
+				{#if !visible.length}
+					<p class="hint">{empty.none}</p>
+				{:else if !visibleInView.length}
+					<p class="hint">{empty.offscreen}</p>
+				{/if}
+			{/if}
 		</div>
+	</section>
 
-		<div class="right">
-			<MapView {pins} bind:selected {hot} minZoom={8} meCoords={position.coords} {locateTick}
-				onzoomgate={(g) => (zoomGated = g)} onbounds={(b) => (mapBounds = b)} />
-			<p class="hint" style="margin-top:8px">Click a card or a pin to see the full ad below.</p>
-		</div>
-	</div>
+	<section class="board mapboard veil">
+		<MapView
+			{pins}
+			bind:selected
+			{hot}
+			minZoom={8}
+			meCoords={position.coords}
+			{locateTick}
+			onzoomgate={(g) => (zoomGated = g)}
+			onbounds={(b) => (mapBounds = b)}
+		/>
+		<p class="hint maphint">Tap a card or a pin to open the full ad.</p>
+		<button type="button" class="nearme" onclick={searchNearMe}>
+			<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+				<path
+					d="M12 2C7.58 2 4 5.58 4 10c0 5.25 7 12 8 12s8-6.75 8-12c0-4.42-3.58-8-8-8Zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z"
+				/>
+			</svg>
+			Search Near Me
+		</button>
+		{#if locateAttempted && position.status === 'denied'}
+			<p class="hint locerr">Location access was denied.</p>
+		{/if}
+	</section>
 </div>
 
 {#if open}
@@ -385,29 +493,37 @@
 			{#if open.kind !== 'member' && open.event_at}
 				<span style="color:var(--marker)">{formatEventAt(open.event_at)}</span> · {LABEL[open.kind]}
 			{:else}
-				{open.commitment}{#if open.paid} · <span class="paid">Paid</span>{/if}
+				{open.commitment}{#if open.paid}
+					· <span class="paid">Paid</span>{/if}
 			{/if}
-			{#if distanceLabel(open)} · {distanceLabel(open)}{/if}
+			{#if distanceLabel(open)}
+				· {distanceLabel(open)}{/if}
 		</div>
 		<p class="note">{open.blurb}</p>
 		{@render tags(open, true)}
 		<div class="row" style="margin-top:10px">
 			{#each open.links as l}
-				<a class="social" href={toHref(l.handle)} target="_blank" rel="noopener noreferrer nofollow">
+				<a
+					class="social"
+					href={toHref(l.handle)}
+					target="_blank"
+					rel="noopener noreferrer nofollow"
+				>
 					Message on {l.kind} &rarr;
 				</a>
 			{/each}
 			<a class="social maplink" href={mapsUrl(open)} target="_blank" rel="noopener noreferrer">
 				<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
-					<path d="M12 2C7.58 2 4 5.58 4 10c0 5.25 7 12 8 12s8-6.75 8-12c0-4.42-3.58-8-8-8Zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z" />
+					<path
+						d="M12 2C7.58 2 4 5.58 4 10c0 5.25 7 12 8 12s8-6.75 8-12c0-4.42-3.58-8-8-8Zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z"
+					/>
 				</svg>
 				Location &rarr;
 			</a>
 		</div>
 		<p class="hint" style="margin-top:10px">
-			Contact happens on their socials. This board only holds the ad, and it comes down
-			in {plural(open.days_left, 'day')} unless they renew.
-			The pin is accurate to about 700m, not to the door.
+			Talk to them on their socials. The ad comes down in {plural(open.days_left, 'day')}
+			unless they renew, and the pin is good to about 700m, not to the door.
 		</p>
 		<button type="button" class="reportlink" onclick={() => open && openReport(open)}>
 			Report this ad
@@ -418,14 +534,11 @@
 <dialog bind:this={reportDialog} class="reportbox" onclose={() => (reporting = null)}>
 	{#if reportState === 'done'}
 		<p class="lab">Thanks</p>
-		<p class="hint">
-			Logged. Nothing happens to the ad automatically, a person reads it. If you reported
-			an impersonation, say who it is pretending to be, it is the only way to check.
-		</p>
+		<p class="hint">Logged. Nothing happens automatically, a person reads it.</p>
 		<button type="button" class="go" onclick={() => reportDialog?.close()}>Close</button>
 	{:else}
 		<p class="lab">Report {reporting?.band_name ?? 'this ad'}</p>
-		<p class="hint">Nobody is told who reported what. Pick the closest reason.</p>
+		<p class="hint">Nobody is told who reported it. Pick the closest reason.</p>
 
 		<div class="radiorow">
 			{#each REPORT_REASONS as [id, l]}
@@ -437,8 +550,12 @@
 		</div>
 
 		<label for="report_detail" class="fieldname" style="margin-top:12px">Anything to add</label>
-		<textarea id="report_detail" rows="3" maxlength="600" bind:value={reportDetail}
-			placeholder="Optional. A link, a name, whatever makes it checkable."></textarea>
+		<textarea
+			id="report_detail"
+			rows="3"
+			maxlength="600"
+			bind:value={reportDetail}
+			placeholder="Optional. A link or a name, so it can be checked."></textarea>
 
 		{#if reportState === 'failed'}
 			<p class="err">That did not go through. Check your connection and try again.</p>

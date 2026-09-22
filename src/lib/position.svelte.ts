@@ -41,14 +41,23 @@ async function request() {
 		return;
 	}
 	navigator.geolocation.getCurrentPosition(
-		(p) => { coords = { lat: p.coords.latitude, lng: p.coords.longitude }; status = 'granted'; },
-		() => { status = 'denied'; },
-		{ maximumAge: 5 * 60_000, timeout: 8000 }
+		(p) => {
+			coords = { lat: p.coords.latitude, lng: p.coords.longitude };
+			status = 'granted';
+		},
+		() => {
+			status = 'denied';
+		},
+		{ maximumAge: 5 * 60_000, timeout: 8000 },
 	);
 }
 
 export const position = {
-	get coords() { return coords; },
-	get status() { return status; },
-	request
+	get coords() {
+		return coords;
+	},
+	get status() {
+		return status;
+	},
+	request,
 };
